@@ -6,6 +6,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_cad/structure_designer/node_network/add_node_popup.dart';
+import 'package:flutter_cad/structure_designer/node_network/edge_pan.dart';
 import 'package:flutter_cad/structure_designer/node_network/arrangement_labels.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/structure_designer/node_network/node_widget.dart';
@@ -489,7 +490,8 @@ class NodeNetwork extends StatefulWidget {
   State<NodeNetwork> createState() => NodeNetworkState();
 }
 
-class NodeNetworkState extends State<NodeNetwork> {
+class NodeNetworkState extends State<NodeNetwork>
+    with SingleTickerProviderStateMixin {
   /// Focus node for keyboard events
   final focusNode = FocusNode();
 
@@ -528,6 +530,28 @@ class NodeNetworkState extends State<NodeNetwork> {
   /// Last known mouse position in screen coordinates (for Ctrl+V paste)
   Offset _lastMousePosition = Offset.zero;
 
+  // ===== EDGE AUTO-PAN (`doc/design_move_wires.md` Phase 3) =====
+
+  /// Runs while a wire, node or selection-rectangle drag holds the pointer
+  /// in the edge band or past the edge. Each tick pans the canvas — the one
+  /// deliberate per-frame `setState` of a drag, since the whole canvas moves.
+  late final Ticker _edgePanTicker;
+  Duration _edgePanLastElapsed = Duration.zero;
+
+  /// The pointer of the gesture in progress, canvas-local and global. Kept
+  /// past the canvas's bounds: a drag that started here keeps reporting.
+  Offset? _dragPointerLocal;
+  Offset? _dragPointerGlobal;
+
+  /// The canvas panned since the last pointer move, so `Draggable`'s choice
+  /// of drop target may be stale (D14). Read by the release check, which
+  /// runs after the pointer-up.
+  bool _autoPannedSinceMove = false;
+
+  /// The canvas panned during this gesture: persist the viewport once, when
+  /// the gesture ends (D15).
+  bool _autoPannedThisGesture = false;
+
   @override
   void initState() {
     super.initState();
@@ -541,6 +565,8 @@ class NodeNetworkState extends State<NodeNetwork> {
     widget.graphModel.onScrollToNode = _scrollToNode;
     widget.graphModel.onNodeDroppedOnWire = _spliceDroppedNode;
     widget.graphModel.onRequestCanvasFocus = _requestCanvasFocus;
+    widget.graphModel.onCheckWireRelease = _isWireReleaseIgnored;
+    _edgePanTicker = createTicker(_onEdgePanTick);
   }
 
   /// [StructureDesignerModel.onRequestCanvasFocus]: a move drag started.
@@ -568,6 +594,10 @@ class NodeNetworkState extends State<NodeNetwork> {
     if (widget.graphModel.onNodeDroppedOnWire == _spliceDroppedNode) {
       widget.graphModel.onNodeDroppedOnWire = null;
     }
+    if (widget.graphModel.onCheckWireRelease == _isWireReleaseIgnored) {
+      widget.graphModel.onCheckWireRelease = null;
+    }
+    _edgePanTicker.dispose();
     focusNode.dispose();
     super.dispose();
   }
@@ -1695,6 +1725,9 @@ class NodeNetworkState extends State<NodeNetwork> {
   /// Handle pointer down event - check for middle mouse button, Shift + right mouse, or left-click for rectangle selection
   void _handlePointerDown(PointerDownEvent event) {
     _clearHover();
+    _trackDragPointer(event);
+    _autoPannedSinceMove = false;
+    _autoPannedThisGesture = false;
     // Check if middle mouse button (button 2)
     if (event.buttons == kTertiaryButton) {
       setState(() {
@@ -1780,6 +1813,8 @@ class NodeNetworkState extends State<NodeNetwork> {
   void _handlePointerMove(PointerMoveEvent event) {
     // Always track mouse position for paste (Ctrl+V)
     _lastMousePosition = event.localPosition;
+    _trackDragPointer(event);
+    _autoPannedSinceMove = false;
 
     if ((_isMiddleMousePanning || _isShiftRightMousePanning) &&
         _lastPanPosition != null) {
@@ -1796,11 +1831,16 @@ class NodeNetworkState extends State<NodeNetwork> {
     else if (_selectionRectStart != null && event.buttons == kPrimaryButton) {
       _handleSelectionRectUpdate(event.localPosition);
     }
+    _updateEdgePan();
   }
 
   /// Handle pointer up event to end panning or rectangle selection
   void _handlePointerUp(PointerUpEvent event) {
     _scheduleHoverUpdate(event.localPosition);
+    // Before any drop: this Listener sees the up ahead of the gesture
+    // recognizers, so the release check reads where the pointer let go.
+    _trackDragPointer(event);
+    _endEdgePanGesture();
     if (_isMiddleMousePanning || _isShiftRightMousePanning) {
       final didPan = _didPan;
       setState(() {
@@ -1963,6 +2003,117 @@ class NodeNetworkState extends State<NodeNetwork> {
     _syncCanvasViewportToKernel();
   }
 
+  // ===== EDGE AUTO-PAN =====
+
+  void _trackDragPointer(PointerEvent event) {
+    _dragPointerLocal = event.localPosition;
+    _dragPointerGlobal = event.position;
+  }
+
+  Size? get _canvasSize {
+    final box = context.findRenderObject() as RenderBox?;
+    return box != null && box.hasSize ? box.size : null;
+  }
+
+  /// Whether one of the drags edge auto-pan serves is in progress (D12): a
+  /// new or moved wire (not a cancelled move), a node, or a selection
+  /// rectangle. A middle-mouse pan already moves the canvas by hand.
+  bool get _edgePanDragActive {
+    if (_isMiddleMousePanning || _isShiftRightMousePanning) return false;
+    final model = widget.graphModel;
+    final move = model.wireMove;
+    return model.draggedWire != null ||
+        (move != null && !move.cancelled) ||
+        model.isNodeDragInProgress ||
+        _selectionRectStart != null;
+  }
+
+  /// Start or stop the ticker for the pointer's current place.
+  void _updateEdgePan() {
+    final pointer = _dragPointerLocal;
+    final size = _canvasSize;
+    final wanted = pointer != null &&
+        size != null &&
+        _edgePanDragActive &&
+        edgePanVelocity(pointer, size) != Offset.zero;
+    if (wanted && !_edgePanTicker.isActive) {
+      _edgePanLastElapsed = Duration.zero;
+      _edgePanTicker.start();
+    } else if (!wanted && _edgePanTicker.isActive) {
+      _edgePanTicker.stop();
+    }
+  }
+
+  /// One frame of edge auto-pan: pan the canvas, and keep what is dragged
+  /// under the pointer (D13). A wire's free end needs nothing — it is stored
+  /// in canvas-local pixels, which is where the pointer still is.
+  void _onEdgePanTick(Duration elapsed) {
+    final dt = math.min(
+        (elapsed - _edgePanLastElapsed).inMicroseconds / 1e6, EDGE_PAN_MAX_DT);
+    _edgePanLastElapsed = elapsed;
+    final pointer = _dragPointerLocal;
+    final size = _canvasSize;
+    if (!mounted || pointer == null || size == null || !_edgePanDragActive) {
+      _edgePanTicker.stop();
+      return;
+    }
+    final velocity = edgePanVelocity(pointer, size);
+    if (velocity == Offset.zero) {
+      _edgePanTicker.stop();
+      return;
+    }
+    if (dt <= 0) return;
+    final step = edgePanStep(velocity, dt, getZoomScale(_zoomLevel));
+    final model = widget.graphModel;
+    if (model.isNodeDragInProgress) model.nudgeDraggedNodes(step.nodeDelta);
+    setState(() {
+      _panOffset += step.panDelta;
+      final start = _selectionRectStart;
+      if (start != null) {
+        final shifted = start + step.rectStartShift;
+        _selectionRectStart = shifted;
+        _selectionRect = Rect.fromPoints(shifted, pointer);
+      }
+    });
+    _autoPannedSinceMove = true;
+    _autoPannedThisGesture = true;
+  }
+
+  /// The gesture ended (pointer up or cancel): stop panning and, if it
+  /// panned, persist the viewport once (D15). [_autoPannedSinceMove] stays
+  /// set — the release check that follows the up still needs it.
+  void _endEdgePanGesture() {
+    if (_edgePanTicker.isActive) _edgePanTicker.stop();
+    if (_autoPannedThisGesture) {
+      _autoPannedThisGesture = false;
+      _syncCanvasViewportToKernel();
+    }
+  }
+
+  /// [StructureDesignerModel.onCheckWireRelease]: the D19 / D14 rule
+  /// ([releaseDecision]) for a release onto [chosenPin], the pin `Draggable`
+  /// chose (null for empty space).
+  bool _isWireReleaseIgnored(PinReference? chosenPin) {
+    final local = _dragPointerLocal;
+    final global = _dragPointerGlobal;
+    final size = _canvasSize;
+    if (!mounted || local == null || global == null || size == null) {
+      return false;
+    }
+    final insideCanvas = (Offset.zero & size).contains(local);
+    // The hit test matters only after a pan, so only then is it run.
+    final underPointer = insideCanvas && _autoPannedSinceMove
+        ? pinUnderPointer(global, View.of(context).viewId)
+        : null;
+    return releaseDecision(
+          insideCanvas: insideCanvas,
+          pannedSinceMove: _autoPannedSinceMove,
+          chosenPin: chosenPin,
+          pinUnderPointer: underPointer,
+        ) ==
+        ReleaseDecision.ignore;
+  }
+
   /// Persist the current pan + zoom onto the active network so switching back
   /// (including Back/Forward) restores this exact view instead of re-framing
   /// the top-left node (issue #414 Phase 4, `doc/design_find_usages.md` D7).
@@ -2119,6 +2270,7 @@ class NodeNetworkState extends State<NodeNetwork> {
                 onPointerHover: _handlePointerHover,
                 onPointerMove: _handlePointerMove,
                 onPointerUp: _handlePointerUp,
+                onPointerCancel: (_) => _endEdgePanGesture(),
                 onPointerSignal: (event) {
                   if (event is PointerScrollEvent) {
                     _handlePointerScroll(event);
@@ -2134,8 +2286,13 @@ class NodeNetworkState extends State<NodeNetwork> {
                       _handleSecondaryTapDown(details, context, model),
                   child: _buildUserTypeDropTarget(
                     model,
-                    Stack(
-                      children: _buildStackChildren(model),
+                    // The live canvas clips what it paints at its bounds
+                    // (D18): a wire dragged past the edge is cut off at the
+                    // border, not drawn over the viewport or the panels.
+                    ClipRect(
+                      child: Stack(
+                        children: _buildStackChildren(model),
+                      ),
                     ),
                   ),
                 ),

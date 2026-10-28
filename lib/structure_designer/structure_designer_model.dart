@@ -490,6 +490,17 @@ class StructureDesignerModel extends ChangeNotifier {
   /// beat the canvas's own tap-down focus grab in the gesture arena.
   VoidCallback? onRequestCanvasFocus;
 
+  /// Registered by the node network editor: whether a wire release must be
+  /// ignored, given the pin `Draggable` chose for it (null for none) — a
+  /// release outside the canvas, or one after an edge auto-pan whose pin is
+  /// no longer under the pointer (`doc/design_move_wires.md` D14, D19).
+  bool Function(PinReference? chosenPin)? onCheckWireRelease;
+
+  /// Whether the wire release onto [chosenPin] (null for empty space) must
+  /// do nothing. Every wire release path asks this first.
+  bool wireReleaseIgnored(PinReference? chosenPin) =>
+      onCheckWireRelease?.call(chosenPin) ?? false;
+
   /// The declared input whose name field the property panel focuses on its
   /// next build — set by an open-port drop ([addInputFromWire]) and taken by
   /// the `expr` / `record_construct` editors via [takePendingNameFocus].
@@ -584,6 +595,32 @@ class StructureDesignerModel extends ChangeNotifier {
   /// drag-commit path goes through.
   List<BigInt>? _dragScopeChain;
   final Set<BigInt> _draggedNodeIds = {};
+
+  /// Whether a node drag is in progress (it has moved at least once). The
+  /// edge auto-pan reads it to know what is being dragged.
+  bool get isNodeDragInProgress => _dragScopeChain != null;
+
+  /// Edge auto-pan moved the canvas by `-delta` (logical): move the dragged
+  /// nodes by [delta], so they stay under a still pointer
+  /// (`doc/design_move_wires.md` D13). Clamped like any drag step, so a body
+  /// node still cannot leave its body. Drag fast path: no notify.
+  void nudgeDraggedNodes(Offset delta) {
+    final scopeChain = _dragScopeChain;
+    if (scopeChain == null || activeNetworkReadOnly) return;
+    final containerNodes = _nodesAtScope(scopeChain);
+    if (containerNodes == null) return;
+    final dragged = _draggedNodeIds
+        .map((id) => containerNodes[id])
+        .whereType<NodeView>()
+        .toList();
+    if (dragged.isEmpty) return;
+    final clamped = _clampZoneBodyDragDelta(delta, dragged, scopeChain);
+    for (final node in dragged) {
+      node.position = APIVec2(
+          x: node.position.x + clamped.dx, y: node.position.y + clamped.dy);
+    }
+    dragRepaint.value++;
+  }
 
   /// True while a node-drag is in progress for the node at ([nodeId],
   /// [scopeChain]): either the node itself is being dragged, or it lives in

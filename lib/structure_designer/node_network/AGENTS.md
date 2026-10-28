@@ -18,6 +18,7 @@ Interactive visual node graph editor widget. Handles rendering, interaction, and
 | `node_name_path.dart` | Composes a node's **name path** (`map4/e1`) from a `NodeNetworkView` — the spelling the AI is handed in error paths, diff hunk titles and the Layout log. Kept for the surfaces that *display* a path for a node already in hand (the name strip, *Copy node name*); anything that *matches* a path goes through Rust instead (`find_nodes_by_name` / `resolve_node_path`) |
 | `open_port_tabs.dart` | The open-port `+` tabs (`doc/design_wire_declared_inputs.md`): the pure placement `openPortTabs` (tested in `test/open_port_tabs_test.dart`), the canvas layer and each tab's `DragTarget` |
 | `wire_drag_mode.dart` / `wire_move.dart` | The move-wires drag (`doc/design_move_wires.md`): the gesture rule, the `WireMove` state, and the pure key / segment helpers (tested in `test/wire_drag_mode_test.dart`, `test/wire_move_test.dart`) |
+| `edge_pan.dart` | Edge auto-pan (`doc/design_move_wires.md` Phase 3): the pure velocity / step / release-rule functions (tested in `test/edge_pan_test.dart`) and `pinUnderPointer` (widget-tested in `test/pin_under_pointer_test.dart`); the ticker that calls them is in `NodeNetworkState` |
 | `find_node_picker.dart` | **Find Node** (`doc/design_node_names_in_ui.md` D7): the top-of-canvas "go to symbol" overlay and its rows. Matching, ranking and the path spelling are Rust's (`find_nodes_by_name`) — this file is the overlay, the keyboard and the landing |
 
 ## Coordinate System
@@ -43,6 +44,7 @@ Three discrete levels with different detail:
 - **Wire creation:** Drag from pin → drop on compatible pin
 - **Auto-connect:** Drop wire in empty space → opens `AddNodePopup` filtered by type, then **plans before it changes anything** (`doc/design_insert_node_on_wire.md` Phase 0): `model.planWireDrop` returns the valid arrangements (which input takes the wire, or which output feeds the slot — every non-function output, not only pin 0, and the open port when no pin fits), `ArrangementDialog` asks only when there is more than one, and `model.addNodeAndConnect` commits node + wire as one undo step. Rust computes the scope depth; cancelling leaves the network untouched. Row labels come from the pure `arrangementRowLabels` (`arrangement_labels.dart`, tested in `test/arrangement_labels_test.dart`)
 - **Move wires:** a plain drag from a connected single input, or a Ctrl+drag from any connected pin, picks up that pin's wires and drops them on another pin (`doc/design_move_wires.md`). The mode is decided once at drag start by the pure `wireDragMode` (`wire_drag_mode.dart`) from `sd_api.pinWires`; Rust owns every acceptance rule (`moveWiresRefusal`, asked once per pin through a `PerDragPlanMemo` keyed by `pinKey`) and commits with `moveWires`. A move is **a separate drag state** (`model.wireMove`, `wire_move.dart`) and leaves `draggedWire` null — that is what keeps the open-port tabs hidden and the source pin's `onDragEnd` from opening the Add Node popup. The painters hide the held wires by `heldWireKey`, which must equal `WireHitResult.keyOf` (both go through `WireHitResult.storageKey`), and draw `wireMoveSegments`. Escape sets `wireMove.cancelled` rather than clearing it: `Draggable` cannot be cancelled from outside, and a cleared move would let the next `onDragUpdate` start a new wire
+- **Edge auto-pan:** during a wire drag (new or moved), a node drag or a rectangle selection, a pointer in the edge band or past the edge pans the canvas (`edge_pan.dart`). It works because the canvas `Listener` keeps receiving the pointer's moves past its bounds for any drag that *started* on the canvas — which is also why drags from the user-types panel do not pan. Each tick moves dragged nodes by the opposite logical step (`model.nudgeDraggedNodes`) and the rectangle's start corner with the content. **Every wire release path asks `model.wireReleaseIgnored(chosenPin)` first** (`PinWidget.onAcceptWithDetails`, the empty-space branch of `onDragEnd`): a release outside the canvas does nothing (D19), and after a pan with a still pointer the pin `Draggable` chose — it re-hit-tests only on pointer moves — must equal `pinUnderPointer`, Draggable's own hit test, read through the `MetaData(PinReference)` wrapper around each pin's `DragTarget`. The canvas `Listener` sees the pointer-up before the gesture recognizers deliver the drop, which is what lets it record the release position first. A new wire drop target owes the same check
 - **Open port:** while a wire is dragged, nodes with `hasOpenInputPort` show a `+` tab below them; dropping on it declares an input from the wire (see "Open-port tabs" below)
 - **Keyboard:** Ctrl+C/X/V (copy/cut/paste), Del (delete), Ctrl+Del (dissolve the one selected node; handled *before* the Del branch and never falls through to it — a refusal is a transient snackbar), Ctrl+D (duplicate)
 
@@ -63,6 +65,12 @@ pointer handling, the selection rectangle, and the drag fast path below.
 
 The capture is a single build → layout → paint pass, so nothing that needs a
 later frame (a post-frame callback, an animation, a hover) can appear in it.
+
+The live canvas wraps its `Stack` in a `ClipRect`: the wire painters'
+`CustomPaint` is canvas-sized but paints wherever a curve goes, and a `Stack`
+clips only children whose *layout* overflows, so a wire dragged past the edge
+used to be drawn over the viewport and the panels. The export needs no clip —
+it lays out at the full content size.
 
 It renders the current model state verbatim with **one** exception: the
 `hideSelection` flag, threaded from `NodeNetworkCanvasSnapshot` through
@@ -110,6 +118,11 @@ of frame time; per-widget `ScopeResolver` construction made rebuilds O(N²)):
    notify. **A new continuous-drag interaction must follow this pattern**; a
    new widget that renders drag-mutated state must either live under the
    per-node `ListenableBuilder` or listen to `dragRepaint` itself.
+
+   The one deliberate exception is the edge auto-pan ticker: each tick is a
+   `setState` on `NodeNetworkState` that rebuilds the whole canvas, because
+   the whole canvas moves — the same cost a middle-mouse pan pays per pointer
+   move. It runs only while the pointer is in the edge band.
 
 ## Editable widgets on the canvas (the focus-steal trap)
 

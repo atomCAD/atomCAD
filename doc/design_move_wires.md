@@ -1,6 +1,6 @@
 # Moving wires between pins, and edge auto-pan (issue #435)
 
-## Status: Phase 1a done (275e510c, 2026-10-27); Phase 1b done (dd37e46c, 2026-10-27); Phase 2 done (2026-10-27); Phase 3 next
+## Status: Phase 1a done (275e510c, 2026-10-27); Phase 1b done (dd37e46c, 2026-10-27); Phase 2 done (2e0b5716, 2026-10-27); Phase 3 implemented (2026-10-28); Phase 4 walkthrough next
 
 ## Motivation
 

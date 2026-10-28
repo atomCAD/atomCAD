@@ -787,7 +787,7 @@ class PinWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bool isInput = pinReference.isInput;
-    return SizedBox(
+    final target = SizedBox(
       width: PIN_HIT_AREA_WIDTH,
       height: PIN_HIT_AREA_HEIGHT,
       child: DragTarget<PinReference>(
@@ -856,7 +856,10 @@ class PinWidget extends StatelessWidget {
               }
               // Store the drag info before clearing
               final dragInfo = model.draggedWire;
-              if (dragInfo != null) {
+              // A release outside the canvas, or onto a pin an edge
+              // auto-pan brought under a still pointer, opens no popup
+              // (D19, D14).
+              if (dragInfo != null && !model.wireReleaseIgnored(null)) {
                 // Notify parent to handle the drop (will show popup if in empty space)
                 model.handleWireDropInEmptySpace(
                   dragInfo.startPin,
@@ -884,6 +887,15 @@ class PinWidget extends StatelessWidget {
         onAcceptWithDetails: (details) {
           final model =
               Provider.of<StructureDesignerModel>(context, listen: false);
+          // `Draggable` chose this pin at the last pointer move; after an
+          // edge auto-pan it may no longer be under the pointer (D14).
+          // Clearing the drag state here keeps `onDragEnd`, which runs
+          // next, from opening the Add Node popup.
+          if (model.wireReleaseIgnored(pinReference)) {
+            model.endWireMove();
+            model.cancelDragWire();
+            return;
+          }
           if (model.wireMove != null) {
             model.moveWires(pinReference);
             return;
@@ -891,6 +903,14 @@ class PinWidget extends StatelessWidget {
           model.connectPins(details.data, pinReference);
         },
       ),
+    );
+    // The release check finds the pin under the pointer with `Draggable`'s
+    // own hit test, through this entry (`pinUnderPointer`, `edge_pan.dart`).
+    // Translucent, like the `DragTarget`'s own, so both cover the same box.
+    return MetaData(
+      metaData: pinReference,
+      behavior: HitTestBehavior.translucent,
+      child: target,
     );
   }
 }

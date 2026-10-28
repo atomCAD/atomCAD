@@ -337,6 +337,8 @@ The node network editor canvas can be panned the following way:
 - Option 2: SHIFT right mouse button drag
 - Option 3: SHIFT *touch-pan* (for Magic Mouse or touchpad)
 
+**Edge auto-pan.** While you drag a wire (a new one or a moved one), a node or a selection rectangle, hold the pointer near the edge of the canvas, or past it, and the canvas pans that way. The deeper the pointer is in the edge band, or the further past the edge, the faster it pans, up to a fixed speed that is the same at every zoom level. A dragged node or a selection rectangle's starting corner stays on the content it is on. This is how you reach a pin that was off screen when the drag began. Letting go of a wire while the pointer is outside the canvas does nothing: no connection, no moved wires, no *Add Node* popup. If the canvas panned while the pointer held still, a release only acts when the pin under the pointer is still the one the drop was aimed at; move the pointer a little before letting go.
+
 If you get lost you can use the *View > Reset node network view* menu item.
 
 The node network can be zoomed using the mouse scroll wheel.
