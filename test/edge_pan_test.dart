@@ -74,10 +74,10 @@ void main() {
       expect(shallow, greaterThan(0));
       expect(deep, greaterThan(shallow));
       expect(atEdge, greaterThan(deep));
-      expect(atEdge, lessThan(EDGE_PAN_MAX_SPEED));
+      expect(atEdge, EDGE_PAN_MAX_SPEED);
     });
 
-    test('reaches the cap a little past the edge and holds it', () {
+    test('reaches the cap at the edge and holds it past it', () {
       expect(edgePanVelocity(const Offset(-EDGE_PAN_OVERSHOOT, 300), size).dx,
           -EDGE_PAN_MAX_SPEED);
       expect(edgePanVelocity(const Offset(-500, 300), size).dx,

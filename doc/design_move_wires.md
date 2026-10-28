@@ -433,9 +433,11 @@ Offset edgePanVelocity(Offset pointer, Size size);
 ```
 
 Per axis: zero while the pointer is more than `EDGE_PAN_BAND` (≈ 30 px) inside
-the edge, rising linearly to `EDGE_PAN_MAX_SPEED` at the edge and beyond,
-reached a little past it. The constants live beside the other canvas
-constants. The values are tuned in the walkthrough, not by the tests.
+the edge, rising linearly to `EDGE_PAN_MAX_SPEED`, reached at the edge
+itself and held beyond it. (The cap was first reached 20 px past the edge;
+the walkthrough found that an edge flush with the screen's edge then panned
+slower, since the pointer cannot go past it.) The constants live in
+`edge_pan.dart`. The values are tuned in the walkthrough, not by the tests.
 
 ### The ticker
 

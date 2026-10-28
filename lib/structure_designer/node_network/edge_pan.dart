@@ -19,9 +19,12 @@ import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 const double EDGE_PAN_BAND = 30.0;
 
 /// How far past the edge, in screen px, the pointer must go for the full
-/// speed. Past the edge has to count, or a fast pointer flies over the band
-/// and stops panning (D12).
-const double EDGE_PAN_OVERSHOOT = 20.0;
+/// speed. Zero: the cap is reached at the edge itself, because an edge that
+/// is also the screen's edge (a maximized window) leaves no room past it, and
+/// a ramp that ended out there made that side pan slower than the others.
+/// Past the edge still counts, at the cap, or a fast pointer flies over the
+/// band and stops panning (D12).
+const double EDGE_PAN_OVERSHOOT = 0.0;
 
 /// The pan speed cap, in screen px/s — the same at every zoom level.
 const double EDGE_PAN_MAX_SPEED = 900.0;
