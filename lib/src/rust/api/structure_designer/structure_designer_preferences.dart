@@ -7,7 +7,7 @@ import '../../frb_generated.dart';
 import '../common_api_types.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `default_ambient_occlusion_strength`, `default_background_color`, `default_ball_and_stick_cull_depth`, `default_csg_mesh_cache_mb`, `default_csg_sketch_cache_mb`, `default_depth_cue_strength`, `default_drawing_plane_grid_color`, `default_drawing_plane_grid_strong_color`, `default_eval_memo_cache_mb`, `default_grid_color`, `default_grid_size`, `default_grid_strong_color`, `default_hide_coplanar_wireframe_edges`, `default_invisible_node_cache_mb`, `default_isosurface_cell_budget`, `default_isosurface_fallback_spacing`, `default_isosurface_quality_multiplier`, `default_label_scale`, `default_lattice_grid_color`, `default_lattice_grid_strong_color`, `default_max_displacement`, `default_samples_per_unit_cell`, `default_scene_alpha`, `default_settle_steps`, `default_shadow_strength`, `default_sharpness_angle_threshold`, `default_show_axes`, `default_show_geometry_shell_for_atomic`, `default_show_grid`, `default_show_lattice_axes`, `default_space_filling_cull_depth`, `default_steps_per_frame`, `default_tool_envelope_color`, `default_true`, `default_unit_cell_wireframe_color`, `default_wireframe_active_color`, `default_wireframe_inactive_color`
+// These functions are ignored because they are not marked as `pub`: `default_ambient_occlusion_strength`, `default_background_color`, `default_ball_and_stick_cull_depth`, `default_csg_mesh_cache_mb`, `default_csg_sketch_cache_mb`, `default_depth_cue_strength`, `default_drawing_plane_grid_color`, `default_drawing_plane_grid_strong_color`, `default_eval_memo_cache_mb`, `default_grid_color`, `default_grid_size`, `default_grid_strong_color`, `default_hide_coplanar_wireframe_edges`, `default_invisible_node_cache_mb`, `default_isosurface_cell_budget`, `default_isosurface_fallback_spacing`, `default_isosurface_quality_multiplier`, `default_label_scale`, `default_lattice_grid_color`, `default_lattice_grid_strong_color`, `default_max_displacement`, `default_samples_per_unit_cell`, `default_scene_alpha`, `default_settle_steps`, `default_shadow_strength`, `default_sharpness_angle_threshold`, `default_show_axes`, `default_show_geometry_shell_for_atomic`, `default_show_grid`, `default_show_lattice_axes`, `default_snap_while_dragging`, `default_space_filling_cull_depth`, `default_steps_per_frame`, `default_tool_envelope_color`, `default_true`, `default_unit_cell_wireframe_color`, `default_wireframe_active_color`, `default_wireframe_inactive_color`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
 
 enum AtomicRenderingMethod {
@@ -371,9 +371,14 @@ class LayoutPreferences {
   /// and arranges the rest around them. Off by default.
   bool respectHandMovedInReflow;
 
+  /// Whether a dragged node snaps to its neighbours (snapping guides). On by
+  /// default.
+  bool snapWhileDragging;
+
   LayoutPreferences({
     required this.layoutAlgorithm,
     required this.respectHandMovedInReflow,
+    required this.snapWhileDragging,
   });
 
   static Future<LayoutPreferences> default_() => RustLib.instance.api
@@ -381,7 +386,9 @@ class LayoutPreferences {
 
   @override
   int get hashCode =>
-      layoutAlgorithm.hashCode ^ respectHandMovedInReflow.hashCode;
+      layoutAlgorithm.hashCode ^
+      respectHandMovedInReflow.hashCode ^
+      snapWhileDragging.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -389,7 +396,8 @@ class LayoutPreferences {
       other is LayoutPreferences &&
           runtimeType == other.runtimeType &&
           layoutAlgorithm == other.layoutAlgorithm &&
-          respectHandMovedInReflow == other.respectHandMovedInReflow;
+          respectHandMovedInReflow == other.respectHandMovedInReflow &&
+          snapWhileDragging == other.snapWhileDragging;
 }
 
 /// The light rig the viewport is shaded with

@@ -820,7 +820,8 @@ class _CommentNodeWidgetState extends State<CommentNodeWidget> {
     final model = Provider.of<StructureDesignerModel>(context, listen: false);
 
     if (widget.node.selected) {
-      model.dragSelectedNodes(logicalDelta, scopeChain: widget.scopeChain);
+      model.dragSelectedNodes(logicalDelta,
+          scopeChain: widget.scopeChain, grabbedNodeId: widget.node.id);
     } else {
       model.dragNodePosition(widget.node.id, logicalDelta,
           scopeChain: widget.scopeChain);

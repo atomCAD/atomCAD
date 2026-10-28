@@ -339,6 +339,15 @@ The node network editor canvas can be panned the following way:
 
 **Edge auto-pan.** While you drag a wire (a new one or a moved one), a node or a selection rectangle, hold the pointer near the edge of the canvas, or past it, and the canvas pans that way. The closer the pointer gets to the edge, the faster it pans; at the edge, or anywhere past it, it pans at full speed, which is the same at every zoom level. A dragged node or a selection rectangle's starting corner stays on the content it is on. This is how you reach a pin that was off screen when the drag began. Letting go of a wire while the pointer is outside the canvas does nothing: no connection, no moved wires, no *Add Node* popup. If the canvas panned while the pointer held still, a release only acts when the pin under the pointer is still the one the drop was aimed at; move the pointer a little before letting go.
 
+**Snapping guides.** While you drag a node, it snaps to what its neighbours offer, and a pink guide shows why:
+
+- **Straight wire** — the node moves up or down until a wire into or out of it runs horizontal; the wire is highlighted.
+- **Aligned edges** — its left or right edge lines up with another node's (a column), or its top or bottom edge does (a row); a dashed line runs through both nodes.
+- **Normal gap** — it sits the usual distance right of a neighbour (50) or below one (30); a bracket labelled with the gap shows it.
+- **Equal spacing** — joining a row or column of two nodes, it repeats their gap; brackets on both gaps are labelled `= 42` (the gap).
+
+A node snaps when it comes within 6 screen pixels of one of these, at any zoom. When several are in range, a straight wire wins, then an aligned edge, then the normal gap, then equal spacing; among equals, the nearest. Move on past it and the node follows the pointer again. Only nodes on screen and in the same scope count (inside a higher-order function's body, only that body's nodes), comments included. When you drag several selected nodes, the one under the pointer snaps and the rest move with it. Hold **Alt** to drag without snapping, or turn snapping off with *Snap while dragging* in [Layout preferences](#layout). While a dragged node highlights a wire it would be inserted into, it does not snap. The guides only appear while you drag; nothing about them is saved.
+
 If you get lost you can use the *View > Reset node network view* menu item.
 
 The node network can be zoomed using the mouse scroll wheel.
@@ -1241,6 +1250,7 @@ How the [3D viewport](#3d-viewport) is drawn. *Anti-aliasing* and *Full display 
 |---------|-------------|
 | Auto-layout algorithm | *Topological Grid* or *Sugiyama*. Controls which algorithm is used by *Edit > Auto-Layout Network*, and which one arranges the nodes a new edit adds. |
 | Auto-Layout keeps manually placed nodes in place | When enabled, a full *Auto-Layout Network* leaves every node you have dragged by hand exactly where it is and arranges the rest around them. Off by default: a reflow you asked for is normally meant to be total. |
+| Snap while dragging | When enabled (the default), a node you drag snaps to straight wires, aligned edges and even gaps, with guides showing why. See [Snapping guides](#navigating-in-the-node-network-editor-panel). Holding **Alt** skips snapping for one drag. |
 
 ### Background
 

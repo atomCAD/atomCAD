@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart' show listEquals, visibleForTesting;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show HardwareKeyboard;
 import 'package:flutter_cad/src/rust/api/common_api_types.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart'
     show AnyhowException, Uint64List;
@@ -61,6 +62,8 @@ import 'package:flutter_cad/structure_designer/namespace_utils.dart';
 import 'package:flutter_cad/structure_designer/network_thumbnails.dart';
 import 'package:flutter_cad/structure_designer/node_network/node_network_painter.dart'
     show WireHitResult;
+import 'package:flutter_cad/structure_designer/node_network/scope_resolver.dart';
+import 'package:flutter_cad/structure_designer/node_network/snap_guides.dart';
 import 'package:flutter_cad/structure_designer/node_network/splice_drop_memo.dart';
 import 'package:flutter_cad/structure_designer/node_network/wire_move.dart';
 import 'package:flutter_cad/structure_designer/namespace_utils.dart' as ns
@@ -614,6 +617,13 @@ class StructureDesignerModel extends ChangeNotifier {
         .whereType<NodeView>()
         .toList();
     if (dragged.isEmpty) return;
+    // The canvas moved, so the snap candidates (the nodes on screen) are
+    // stale: rebuild them, and snap the nudged node like any drag step.
+    _snapSession = null;
+    final grabbed = containerNodes[_snapGrabbedId];
+    if (grabbed != null && _draggedNodeIds.contains(grabbed.id)) {
+      delta = _snapDragDelta(grabbed, scopeChain, _draggedNodeIds, delta);
+    }
     final clamped = _clampZoneBodyDragDelta(delta, dragged, scopeChain);
     for (final node in dragged) {
       node.position = APIVec2(
@@ -639,6 +649,84 @@ class StructureDesignerModel extends ChangeNotifier {
     // Deeper scope: affected iff the next hop below the drag scope is one of
     // the dragged nodes (i.e. this node lives inside a dragged HOF's body).
     return _draggedNodeIds.contains(scopeChain[dragScope.length]);
+  }
+
+  // ----- Snapping guides (`doc/design_deliberate_node_placement.md` B1) -----
+
+  /// Registered by the node network editor: a resolver at the current pan and
+  /// zoom, and the canvas size, for building a drag's [SnapSession]. Asked
+  /// once per drag (and again after an edge auto-pan), never per tick.
+  ({ScopeResolver resolver, Size canvasSize})? Function()? snapCanvas;
+
+  /// The snap state of the node drag in progress: the grabbed node, its
+  /// unsnapped top-left (where the pointer alone would have put it), and the
+  /// session built from the nodes on screen at the drag's first tick.
+  BigInt? _snapGrabbedId;
+  List<BigInt>? _snapScope;
+  Offset? _snapRaw;
+  SnapSession? _snapSession;
+  SnapResult? _snapResult;
+
+  /// The guides of the current drag tick, and the scope their coordinates
+  /// are in; null when nothing snapped. Read by the overlay painter on a
+  /// [dragRepaint] tick — never [notifyListeners].
+  SnapResult? get snapResult => _snapResult;
+  List<BigInt> get snapScope => _snapScope ?? const [];
+
+  /// Whether a dragged node snaps (Preferences › Layout). On by default.
+  bool get snapWhileDragging =>
+      preferences?.layoutPreferences.snapWhileDragging ?? true;
+
+  /// The delta that moves [grabbed] (in [scopeChain], with [movingIds]
+  /// moving alongside it) for a pointer delta of [delta]: the pointer's own
+  /// delta, unless a snap applies. The unsnapped position is tracked
+  /// separately, so a snap never sticks — the node leaves it as soon as the
+  /// pointer is out of range. Off while Alt is held, when the preference is
+  /// off, and while an insert-on-wire highlight is up (the two gestures must
+  /// not fight).
+  Offset _snapDragDelta(NodeView grabbed, List<BigInt> scopeChain,
+      Set<BigInt> movingIds, Offset delta) {
+    final current = apiVec2ToOffset(grabbed.position);
+    if (_snapGrabbedId != grabbed.id ||
+        !listEquals(_snapScope, scopeChain) ||
+        _snapRaw == null) {
+      _endSnapDrag();
+      _snapGrabbedId = grabbed.id;
+      _snapScope = List<BigInt>.of(scopeChain);
+      _snapRaw = current;
+    }
+    final raw = _snapRaw! + delta;
+    _snapRaw = raw;
+    _snapResult = null;
+    if (!snapWhileDragging ||
+        HardwareKeyboard.instance.isAltPressed ||
+        _spliceDropTarget != null) {
+      return raw - current;
+    }
+    var session = _snapSession;
+    if (session == null) {
+      final canvas = snapCanvas?.call();
+      if (canvas == null) return raw - current;
+      session = _snapSession = buildSnapSession(
+        resolver: canvas.resolver,
+        scopeChain: scopeChain,
+        grabbedId: grabbed.id,
+        movingIds: movingIds,
+        viewport: Offset.zero & canvas.canvasSize,
+      );
+      if (session == null) return raw - current;
+    }
+    final result = session.resolve(raw);
+    if (result.guides.isNotEmpty) _snapResult = result;
+    return result.position - current;
+  }
+
+  void _endSnapDrag() {
+    _snapGrabbedId = null;
+    _snapScope = null;
+    _snapRaw = null;
+    _snapSession = null;
+    _snapResult = null;
   }
 
   // ----- Drag onto a wire (`doc/design_insert_node_on_wire.md` Phase 4) -----
@@ -1336,7 +1424,11 @@ class StructureDesignerModel extends ChangeNotifier {
   ///
   /// Notifies via [dragRepaint] (drag fast path), not [notifyListeners] — the
   /// commit at drag end does the full notify.
-  void dragSelectedNodes(Offset delta, {List<BigInt> scopeChain = const []}) {
+  ///
+  /// [grabbedNodeId] is the node under the pointer: it alone snaps to its
+  /// neighbours, and the rest of the selection follows by the same delta.
+  void dragSelectedNodes(Offset delta,
+      {List<BigInt> scopeChain = const [], BigInt? grabbedNodeId}) {
     // A linked (read-only) network: every canvas edit gesture in this model
     // starts with the same gate, so the gesture is inert rather than refused
     // after the fact (`doc/design_library_linking.md` §5.3).
@@ -1344,7 +1436,13 @@ class StructureDesignerModel extends ChangeNotifier {
     if (nodeNetworkView == null) return;
     final containerNodes = _nodesAtScope(scopeChain);
     if (containerNodes == null) return;
-    final selected = containerNodes.values.where((node) => node.selected);
+    final selected =
+        containerNodes.values.where((node) => node.selected).toList();
+    final grabbed = containerNodes[grabbedNodeId];
+    if (grabbed != null && grabbed.selected) {
+      delta = _snapDragDelta(
+          grabbed, scopeChain, {for (final n in selected) n.id}, delta);
+    }
     final clamped = _clampZoneBodyDragDelta(delta, selected, scopeChain);
     _dragScopeChain = List<BigInt>.of(scopeChain);
     _draggedNodeIds.clear();
@@ -2090,6 +2188,7 @@ class StructureDesignerModel extends ChangeNotifier {
       {List<BigInt> scopeChain = const []}) {
     final node = _findNodeInScope(nodeId, scopeChain);
     if (node == null) return;
+    delta = _snapDragDelta(node, scopeChain, {nodeId}, delta);
     final clamped = _clampZoneBodyDragDelta(delta, [node], scopeChain);
     _dragScopeChain = List<BigInt>.of(scopeChain);
     _draggedNodeIds
@@ -5395,6 +5494,7 @@ class StructureDesignerModel extends ChangeNotifier {
     _dragScopeChain = null;
     _draggedNodeIds.clear();
     _endSpliceDrag();
+    _endSnapDrag();
     _userTypeDropWire = null;
     // A move drag survives a refresh from elsewhere, but its plans were made
     // against the old network: ask again.

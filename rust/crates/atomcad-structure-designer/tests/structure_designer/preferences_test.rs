@@ -357,6 +357,8 @@ fn test_default_values_match_documentation() {
         LayoutAlgorithmPreference::Sugiyama
     );
     assert!(!prefs.layout_preferences.respect_hand_moved_in_reflow);
+    // Snapping guides default on.
+    assert!(prefs.layout_preferences.snap_while_dragging);
 
     // Simulation defaults
     assert!(prefs.simulation_preferences.use_vdw_cutoff);
@@ -471,6 +473,7 @@ fn test_non_default_values_roundtrip() {
         layout_preferences: LayoutPreferences {
             layout_algorithm: LayoutAlgorithmPreference::TopologicalGrid,
             respect_hand_moved_in_reflow: true,
+            snap_while_dragging: false,
         },
         simulation_preferences: SimulationPreferences {
             use_vdw_cutoff: true,
@@ -669,6 +672,7 @@ fn test_non_default_values_roundtrip() {
         LayoutAlgorithmPreference::TopologicalGrid
     );
     assert!(loaded.layout_preferences.respect_hand_moved_in_reflow);
+    assert!(!loaded.layout_preferences.snap_while_dragging);
 
     assert!(loaded.simulation_preferences.use_vdw_cutoff);
     assert_eq!(
@@ -1205,4 +1209,17 @@ fn shadows_roundtrip_off_with_their_strength_kept() {
     let loaded: StructureDesignerPreferences = serde_json::from_str(&json).unwrap();
     assert!(!loaded.rendering_preferences.shadows);
     assert_eq!(loaded.rendering_preferences.shadow_strength, 0.45);
+}
+
+/// Snapping guides (`doc/design_deliberate_node_placement.md` B1) default on,
+/// including for a file whose layout group predates the key — a plain
+/// `#[serde(default)]` would have turned them off there.
+#[test]
+fn snap_while_dragging_defaults_on_for_older_files() {
+    let old: StructureDesignerPreferences =
+        serde_json::from_str(r#"{"layout_preferences": {"layout_algorithm": "Sugiyama"}}"#)
+            .unwrap();
+    assert!(old.layout_preferences.snap_while_dragging);
+    let no_group: StructureDesignerPreferences = serde_json::from_str("{}").unwrap();
+    assert!(no_group.layout_preferences.snap_while_dragging);
 }

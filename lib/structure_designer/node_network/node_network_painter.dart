@@ -8,6 +8,7 @@ import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 
 import 'package:flutter_cad/structure_designer/node_network/node_network.dart';
 import 'package:flutter_cad/structure_designer/node_network/scope_resolver.dart';
+import 'package:flutter_cad/structure_designer/node_network/snap_guides.dart';
 import 'package:flutter_cad/structure_designer/node_network/wire_move.dart';
 
 // Dash patterns for wires carrying unaligned Blueprint/Crystal values.
@@ -28,6 +29,16 @@ const double ANCHOR_LEADER_WIDTH = 1.2;
 const double ANCHOR_LEADER_WIDTH_SELECTED = 2.0;
 const Color ANCHOR_LEADER_COLOR = Color(0xFF8D8D8D);
 const Color ANCHOR_LEADER_COLOR_SELECTED = Color(0xFFE08000);
+
+// Snapping guides (`doc/design_deliberate_node_placement.md` B1): drawn only
+// while a node is dragged, in one colour that no wire type uses, so a guide
+// never reads as data.
+const Color SNAP_GUIDE_COLOR = Color(0xFFE91E63);
+const double SNAP_GUIDE_WIDTH = 1.0;
+const double SNAP_GUIDE_DASH_ON = 5.0;
+const double SNAP_GUIDE_DASH_OFF = 3.0;
+const double SNAP_GUIDE_BRACKET_TICK = 4.0;
+const double SNAP_GUIDE_LABEL_FONT_SIZE = 10.0;
 
 /// Radius of the dot marking a leader line's target end. On a wire anchor it
 /// is the only thing that says *which* wire; on a node anchor it sits on the
@@ -364,6 +375,9 @@ class NodeNetworkPainter extends CustomPainter {
     // stays visible under the node being dragged.
     if (spliceTarget != null) _drawSpliceTarget(spliceTarget, canvas);
 
+    // Why the dragged node snapped where it is.
+    _drawSnapGuides(resolver, canvas);
+
     // The rubber bands of a move drag, on top of body wires like the
     // dragged wire below.
     final move = graphModel.wireMove;
@@ -429,6 +443,75 @@ class NodeNetworkPainter extends CustomPainter {
       return findWiresAlong(points,
           includeBodyReturn: true, resolver: resolver);
     });
+  }
+
+  /// The guides of the node drag's current snap
+  /// ([StructureDesignerModel.snapResult]), mapped from the drag's scope to
+  /// the screen. Interaction, not content: the image export never draws them.
+  void _drawSnapGuides(ScopeResolver resolver, Canvas canvas) {
+    final result = graphModel.snapResult;
+    if (hideSelection || result == null) return;
+    final scope = graphModel.snapScope;
+    Offset toScreen(Offset p) => resolver.scopedToScreen(scope, p);
+    final line = Paint()
+      ..color = SNAP_GUIDE_COLOR
+      ..strokeWidth = SNAP_GUIDE_WIDTH
+      ..style = PaintingStyle.stroke;
+    for (final guide in result.guides) {
+      switch (guide) {
+        case SnapLineGuide(:final from, :final to):
+          final path = Path()
+            ..moveTo(toScreen(from).dx, toScreen(from).dy)
+            ..lineTo(toScreen(to).dx, toScreen(to).dy);
+          canvas.drawPath(
+              _dashedPath(path, SNAP_GUIDE_DASH_ON, SNAP_GUIDE_DASH_OFF), line);
+        case SnapWireGuide(:final from, :final to):
+          final a = toScreen(from);
+          final b = toScreen(to);
+          canvas.drawLine(
+              a,
+              b,
+              Paint()
+                ..color = SNAP_GUIDE_COLOR.withValues(alpha: 0.35)
+                ..strokeWidth = WIRE_WIDTH_SELECTED * 3
+                ..strokeCap = StrokeCap.round);
+          canvas.drawLine(
+              a,
+              b,
+              Paint()
+                ..color = SNAP_GUIDE_COLOR
+                ..strokeWidth = WIRE_WIDTH_NORMAL);
+        case SnapGapGuide(:final from, :final to, :final label):
+          _drawSnapBracket(canvas, toScreen(from), toScreen(to), label, line);
+      }
+    }
+  }
+
+  /// A gap bracket: the measured line, a tick across each end, and the label
+  /// beside its middle.
+  void _drawSnapBracket(
+      Canvas canvas, Offset a, Offset b, String label, Paint paint) {
+    canvas.drawLine(a, b, paint);
+    final horizontal = (b.dx - a.dx).abs() >= (b.dy - a.dy).abs();
+    const t = SNAP_GUIDE_BRACKET_TICK;
+    final tick = horizontal ? const Offset(0, t) : const Offset(t, 0);
+    canvas.drawLine(a - tick, a + tick, paint);
+    canvas.drawLine(b - tick, b + tick, paint);
+    final text = TextPainter(
+      text: TextSpan(
+        text: label,
+        style: const TextStyle(
+            color: SNAP_GUIDE_COLOR,
+            fontSize: SNAP_GUIDE_LABEL_FONT_SIZE,
+            fontWeight: FontWeight.bold),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    final mid = (a + b) / 2;
+    final origin = horizontal
+        ? mid - Offset(text.width / 2, text.height + t)
+        : mid + Offset(t + 2, -text.height / 2);
+    text.paint(canvas, origin);
   }
 
   void _drawSpliceTarget(WireHitResult target, Canvas canvas) {

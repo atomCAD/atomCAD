@@ -25203,11 +25203,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   LayoutPreferences dco_decode_layout_preferences(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 2)
-      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
     return LayoutPreferences(
       layoutAlgorithm: dco_decode_layout_algorithm_preference(arr[0]),
       respectHandMovedInReflow: dco_decode_bool(arr[1]),
+      snapWhileDragging: dco_decode_bool(arr[2]),
     );
   }
 
@@ -32621,9 +32622,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_layoutAlgorithm =
         sse_decode_layout_algorithm_preference(deserializer);
     var var_respectHandMovedInReflow = sse_decode_bool(deserializer);
+    var var_snapWhileDragging = sse_decode_bool(deserializer);
     return LayoutPreferences(
         layoutAlgorithm: var_layoutAlgorithm,
-        respectHandMovedInReflow: var_respectHandMovedInReflow);
+        respectHandMovedInReflow: var_respectHandMovedInReflow,
+        snapWhileDragging: var_snapWhileDragging);
   }
 
   @protected
@@ -40088,6 +40091,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_layout_algorithm_preference(self.layoutAlgorithm, serializer);
     sse_encode_bool(self.respectHandMovedInReflow, serializer);
+    sse_encode_bool(self.snapWhileDragging, serializer);
   }
 
   @protected

@@ -19,6 +19,7 @@ Interactive visual node graph editor widget. Handles rendering, interaction, and
 | `open_port_tabs.dart` | The open-port `+` tabs (`doc/design_wire_declared_inputs.md`): the pure placement `openPortTabs` (tested in `test/open_port_tabs_test.dart`), the canvas layer and each tab's `DragTarget` |
 | `wire_drag_mode.dart` / `wire_move.dart` | The move-wires drag (`doc/design_move_wires.md`): the gesture rule, the `WireMove` state, and the pure key / segment helpers (tested in `test/wire_drag_mode_test.dart`, `test/wire_move_test.dart`) |
 | `edge_pan.dart` | Edge auto-pan (`doc/design_move_wires.md` Phase 3): the pure velocity / step / release-rule functions (tested in `test/edge_pan_test.dart`) and `pinUnderPointer` (widget-tested in `test/pin_under_pointer_test.dart`); the ticker that calls them is in `NodeNetworkState` |
+| `snap_guides.dart` | Snapping guides while a node is dragged (`doc/design_deliberate_node_placement.md` B1): the pure `SnapSession` (targets, priority, guides; tested in `test/snap_guides_test.dart`) and `buildSnapSession`, which reads its candidates from the live view. See "Snapping guides" below |
 | `find_node_picker.dart` | **Find Node** (`doc/design_node_names_in_ui.md` D7): the top-of-canvas "go to symbol" overlay and its rows. Matching, ranking and the path spelling are Rust's (`find_nodes_by_name`) — this file is the overlay, the keyboard and the landing |
 
 ## Coordinate System
@@ -123,6 +124,33 @@ of frame time; per-widget `ScopeResolver` construction made rebuilds O(N²)):
    `setState` on `NodeNetworkState` that rebuilds the whole canvas, because
    the whole canvas moves — the same cost a middle-mouse pan pays per pointer
    move. It runs only while the pointer is in the edge band.
+
+## Snapping guides (node drag)
+
+A dragged node snaps to straight wires, shared edges, the `normal` gap and
+equal spacing (`snap_guides.dart`, `doc/design_deliberate_node_placement.md`
+B1). It rides the drag fast path above, so it is held to the same rules:
+
+- **The session is built once per drag, never per tick.** The model asks the
+  editor for the canvas (`model.snapCanvas`, a resolver at the current pan and
+  zoom plus the canvas size) on the drag's first tick and builds a
+  `SnapSession` whose targets are pre-reduced to "a value for the grabbed
+  node's left / top" and sorted; a tick is a binary search per axis. An edge
+  auto-pan drops the session (the on-screen candidates changed) and the next
+  step rebuilds it.
+- **The model tracks the unsnapped position** (`_snapRaw`) and moves the node
+  by *target − current*, never by the pointer delta. That is what keeps a
+  snap from sticking, and what lets Alt (checked per tick) put the node back
+  under the pointer mid-drag.
+- **Only the grabbed node snaps.** `dragSelectedNodes` takes
+  `grabbedNodeId`; the rest of the selection moves by the grabbed node's
+  delta. A new drag gesture that moves nodes should pass it too, or it simply
+  does not snap.
+- **Insert-on-wire wins.** While `_spliceDropTarget` is set (last tick's
+  highlight), the node follows the pointer unsnapped.
+- **The guides are interaction, not content**: the overlay painter draws
+  `model.snapResult` in the drag's scope (`model.snapScope`), and skips them
+  under `hideSelection`, so the image export never shows them.
 
 ## Editable widgets on the canvas (the focus-steal trap)
 

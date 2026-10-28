@@ -566,7 +566,26 @@ class NodeNetworkState extends State<NodeNetwork>
     widget.graphModel.onNodeDroppedOnWire = _spliceDroppedNode;
     widget.graphModel.onRequestCanvasFocus = _requestCanvasFocus;
     widget.graphModel.onCheckWireRelease = _isWireReleaseIgnored;
+    widget.graphModel.snapCanvas = _snapCanvas;
     _edgePanTicker = createTicker(_onEdgePanTick);
+  }
+
+  /// [StructureDesignerModel.snapCanvas]: what a node drag's snapping needs
+  /// to know about the canvas — the current transform (as a resolver) and
+  /// which part of the network is on screen. Null before the first layout.
+  ({ScopeResolver resolver, Size canvasSize})? _snapCanvas() {
+    final view = widget.graphModel.nodeNetworkView;
+    final size = _canvasSize;
+    if (view == null || size == null) return null;
+    return (
+      resolver: ScopeResolver(
+        root: view,
+        panOffset: _panOffset,
+        scale: getZoomScale(_zoomLevel),
+        zoomLevel: _zoomLevel,
+      ),
+      canvasSize: size,
+    );
   }
 
   /// [StructureDesignerModel.onRequestCanvasFocus]: a move drag started.
@@ -596,6 +615,9 @@ class NodeNetworkState extends State<NodeNetwork>
     }
     if (widget.graphModel.onCheckWireRelease == _isWireReleaseIgnored) {
       widget.graphModel.onCheckWireRelease = null;
+    }
+    if (widget.graphModel.snapCanvas == _snapCanvas) {
+      widget.graphModel.snapCanvas = null;
     }
     _edgePanTicker.dispose();
     focusNode.dispose();

@@ -1920,7 +1920,8 @@ class NodeWidget extends StatelessWidget {
     final model = Provider.of<StructureDesignerModel>(context, listen: false);
 
     if (node.selected) {
-      model.dragSelectedNodes(logicalDelta, scopeChain: scopeChain);
+      model.dragSelectedNodes(logicalDelta,
+          scopeChain: scopeChain, grabbedNodeId: node.id);
     } else {
       model.dragNodePosition(node.id, logicalDelta, scopeChain: scopeChain);
     }

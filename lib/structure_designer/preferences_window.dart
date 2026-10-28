@@ -113,6 +113,8 @@ class PreferencesKeys {
       Key('pref_layout_algorithm_dropdown');
   static const Key respectHandMovedInReflowCheckbox =
       Key('pref_respect_hand_moved_in_reflow_checkbox');
+  static const Key snapWhileDraggingCheckbox =
+      Key('pref_snap_while_dragging_checkbox');
 
   // Simulation settings
   static const Key useVdwCutoffCheckbox = Key('pref_use_vdw_cutoff_checkbox');
@@ -1702,6 +1704,33 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                               const Expanded(
                                 child: Text(
                                     'Auto-Layout keeps manually placed nodes in place'),
+                              ),
+                            ],
+                          ),
+
+                          // Snapping guides while dragging a node
+                          // (`doc/design_deliberate_node_placement.md` B1).
+                          // Holding Alt skips them for one drag.
+                          Row(
+                            children: [
+                              Checkbox(
+                                key: PreferencesKeys.snapWhileDraggingCheckbox,
+                                value: _preferences
+                                    .layoutPreferences.snapWhileDragging,
+                                onChanged: (value) {
+                                  if (value != null) {
+                                    setState(() {
+                                      _preferences.layoutPreferences
+                                          .snapWhileDragging = value;
+                                    });
+                                    _applyPreferences();
+                                  }
+                                },
+                              ),
+                              const SizedBox(width: 8),
+                              const Expanded(
+                                child: Text(
+                                    'Snap while dragging (hold Alt to skip)'),
                               ),
                             ],
                           ),

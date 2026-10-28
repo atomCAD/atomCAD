@@ -593,6 +593,16 @@ pub struct LayoutPreferences {
     /// flag is a hard constraint rather than a tiebreaker.
     #[serde(default)]
     pub respect_hand_moved_in_reflow: bool,
+    /// Whether a dragged node snaps to its neighbours' edges, gaps and
+    /// straight wires (`doc/design_deliberate_node_placement.md` B1). On by
+    /// default; the snapping itself is Flutter's, this only persists the
+    /// switch.
+    #[serde(default = "default_snap_while_dragging")]
+    pub snap_while_dragging: bool,
+}
+
+fn default_snap_while_dragging() -> bool {
+    true
 }
 
 impl Default for LayoutPreferences {
@@ -600,6 +610,7 @@ impl Default for LayoutPreferences {
         Self {
             layout_algorithm: LayoutAlgorithmPreference::Sugiyama,
             respect_hand_moved_in_reflow: false,
+            snap_while_dragging: true,
         }
     }
 }

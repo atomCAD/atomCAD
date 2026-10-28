@@ -668,6 +668,15 @@ pub struct LayoutPreferences {
     #[frb(non_final)]
     #[serde(default)]
     pub respect_hand_moved_in_reflow: bool,
+    /// Whether a dragged node snaps to its neighbours (snapping guides). On by
+    /// default.
+    #[frb(non_final)]
+    #[serde(default = "default_snap_while_dragging")]
+    pub snap_while_dragging: bool,
+}
+
+fn default_snap_while_dragging() -> bool {
+    true
 }
 
 impl Default for LayoutPreferences {
@@ -675,6 +684,7 @@ impl Default for LayoutPreferences {
         Self {
             layout_algorithm: LayoutAlgorithmPreference::Sugiyama,
             respect_hand_moved_in_reflow: false,
+            snap_while_dragging: true,
         }
     }
 }
@@ -1183,6 +1193,7 @@ impl From<&LayoutPreferences> for domain::LayoutPreferences {
         domain::LayoutPreferences {
             layout_algorithm: (&p.layout_algorithm).into(),
             respect_hand_moved_in_reflow: p.respect_hand_moved_in_reflow,
+            snap_while_dragging: p.snap_while_dragging,
         }
     }
 }
@@ -1192,6 +1203,7 @@ impl From<&domain::LayoutPreferences> for LayoutPreferences {
         LayoutPreferences {
             layout_algorithm: (&p.layout_algorithm).into(),
             respect_hand_moved_in_reflow: p.respect_hand_moved_in_reflow,
+            snap_while_dragging: p.snap_while_dragging,
         }
     }
 }
