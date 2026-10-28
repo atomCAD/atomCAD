@@ -2701,6 +2701,17 @@ List<String> takeLoadParamIdRepairs() => RustLib.instance.api
 bool layoutActiveNetwork() => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiLayoutActiveNetwork();
 
+/// Apply an Arrange command to the selected nodes of the scope at `scope_path`
+/// (`doc/design_deliberate_node_placement.md` B2): one undo step, only the
+/// selected nodes move, nothing is pushed.
+///
+/// Returns true if anything moved (and so an undo step was pushed).
+bool arrangeSelectedNodes(
+        {required Uint64List scopePath, required APIArrangeOp op}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiArrangeSelectedNodes(
+            scopePath: scopePath, op: op);
+
 /// Get information about whether/how the current selection can be factored into a subnetwork.
 ///
 /// Returns information that can be used to populate the "Factor into Subnetwork" dialog,

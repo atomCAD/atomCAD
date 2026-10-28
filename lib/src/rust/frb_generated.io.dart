@@ -94,6 +94,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIArgumentKind dco_decode_api_argument_kind(dynamic raw);
 
   @protected
+  APIArrangeOp dco_decode_api_arrange_op(dynamic raw);
+
+  @protected
   APIArrangement dco_decode_api_arrangement(dynamic raw);
 
   @protected
@@ -2362,6 +2365,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIArgumentKind sse_decode_api_argument_kind(SseDeserializer deserializer);
+
+  @protected
+  APIArrangeOp sse_decode_api_arrange_op(SseDeserializer deserializer);
 
   @protected
   APIArrangement sse_decode_api_arrangement(SseDeserializer deserializer);
@@ -5012,6 +5018,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_api_argument_kind(
       APIArgumentKind self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_arrange_op(APIArrangeOp self, SseSerializer serializer);
 
   @protected
   void sse_encode_api_arrangement(

@@ -339,6 +339,41 @@ impl From<APICollapseMode> for CollapseMode {
     }
 }
 
+/// One command of the node editor's Arrange menu
+/// (`doc/design_deliberate_node_placement.md` B2). Converted to the layout
+/// crate's `ArrangeOp`; the GUI always stacks at the `normal` gap.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum APIArrangeOp {
+    AlignLeft,
+    AlignRight,
+    AlignTop,
+    AlignBottom,
+    StackColumn,
+    StackRow,
+    DistributeVertically,
+    DistributeHorizontally,
+    Straighten,
+    Layout,
+}
+
+impl From<APIArrangeOp> for atomcad_structure_designer::layout::ArrangeOp {
+    fn from(op: APIArrangeOp) -> Self {
+        use atomcad_structure_designer::layout::{ArrangeOp, Gap};
+        match op {
+            APIArrangeOp::AlignLeft => ArrangeOp::AlignLeft,
+            APIArrangeOp::AlignRight => ArrangeOp::AlignRight,
+            APIArrangeOp::AlignTop => ArrangeOp::AlignTop,
+            APIArrangeOp::AlignBottom => ArrangeOp::AlignBottom,
+            APIArrangeOp::StackColumn => ArrangeOp::StackColumn(Gap::Normal),
+            APIArrangeOp::StackRow => ArrangeOp::StackRow(Gap::Normal),
+            APIArrangeOp::DistributeVertically => ArrangeOp::DistributeVertically,
+            APIArrangeOp::DistributeHorizontally => ArrangeOp::DistributeHorizontally,
+            APIArrangeOp::Straighten => ArrangeOp::Straighten,
+            APIArrangeOp::Layout => ArrangeOp::Layout,
+        }
+    }
+}
+
 /// Flutter-facing mirror of [`FunctionPinRole`]. The user's per-pin override of
 /// the `-1` function pin's parameter/capture partition. `Auto` is the default
 /// and is stored as *absence* Rust-side; the API always reports a role for

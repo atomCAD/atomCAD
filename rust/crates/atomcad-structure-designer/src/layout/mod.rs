@@ -27,7 +27,9 @@
 //!
 //! # Module Structure
 //!
-//! - `common.rs` - Shared utilities (depth computation, graph traversal)
+//! - `common.rs` - Shared utilities (depth computation, graph traversal, `Gap`)
+//! - `arrange.rs` - align / stack / distribute / straighten / subset layout over
+//!   chosen nodes, shared by the Arrange menu and the AI's layout statements
 //! - `size.rs` - `rendered_node_size`, the one node-size function
 //! - `delta.rs` - `EditDelta` / `diff_scope`, the incremental pass's input
 //! - `motion.rs` - `shift_half_plane` / `cascade` / `grow_rect`, the two
@@ -36,6 +38,7 @@
 //! - `topological_grid.rs` - Simple, reliable layered layout
 //! - `sugiyama.rs` - Sophisticated layout with crossing minimization
 
+pub mod arrange;
 pub mod common;
 pub mod delta;
 pub mod incremental;
@@ -45,7 +48,8 @@ pub mod sugiyama;
 pub mod topological_grid;
 
 // Re-export main types and functions
-pub use common::LayoutAlgorithm;
+pub use arrange::{ArrangeOp, arrange};
+pub use common::{Gap, LayoutAlgorithm};
 pub use delta::{
     DeltaTotals, EditDelta, WireEnd, WireKey, WireSlot, collect_all_wires, diff_scope,
     node_ids_by_path, scopes_inside_out,

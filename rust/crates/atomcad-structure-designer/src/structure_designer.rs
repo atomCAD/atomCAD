@@ -7172,9 +7172,10 @@ impl StructureDesigner {
                 format!("Move {} nodes", moves.len())
             };
 
-            // This is the one path that sets `hand_moved`
+            // One of the two paths that set `hand_moved`
             // (`doc/design_incremental_layout.md` D5): a node the user dragged,
-            // in whatever scope it lives. Record each flag's previous value so
+            // in whatever scope it lives. The other is the Arrange menu
+            // (`arrange_selected_nodes`). Record each flag's previous value so
             // the same Ctrl+Z that puts the node back also takes the claim
             // back. Nodes already flagged are recorded too — restoring `true`
             // is a no-op, and skipping them would make the list depend on
@@ -7204,6 +7205,107 @@ impl StructureDesigner {
                 hand_moved_before,
             });
         }
+    }
+
+    /// Apply an Arrange command to the selected nodes of the scope at
+    /// `scope_path` (`doc/design_deliberate_node_placement.md` B2), as one
+    /// undo step.
+    ///
+    /// The positions come from [`crate::layout::arrange`], the code the AI's
+    /// layout statements share. The stack operations order the selection by
+    /// its current position (y for a column, x for a row), the way a person
+    /// reads it. Only selected nodes move and nothing is pushed out of the
+    /// way (D11): the user watches the result and can judge an overlap.
+    ///
+    /// An Arrange is a deliberate human placement like a drag, so it sets
+    /// `hand_moved` on every node it moves, inside the same `MoveNodesCommand`
+    /// so one Ctrl+Z takes back both.
+    ///
+    /// Returns whether anything moved, i.e. whether an undo step was pushed.
+    pub fn arrange_selected_nodes(
+        &mut self,
+        scope_path: &[u64],
+        op: crate::layout::ArrangeOp,
+    ) -> bool {
+        use crate::layout::ArrangeOp;
+
+        // Read-only guard (`doc/design_library_linking.md` §6).
+        if self.ensure_active_editable().is_err() {
+            return false;
+        }
+        let Some(network_name) = self.active_node_network_name.clone() else {
+            return false;
+        };
+        let Some(network) = self.get_scope_network(scope_path) else {
+            return false;
+        };
+        let sizes = crate::layout::measure_scope(network, &self.node_type_registry);
+        let mut ids: Vec<u64> = network.get_selected_node_ids().iter().copied().collect();
+        let position = |id: &u64| network.nodes[id].position;
+        match op {
+            ArrangeOp::StackColumn(_) => ids.sort_by(|a, b| {
+                let (pa, pb) = (position(a), position(b));
+                pa.y.total_cmp(&pb.y)
+                    .then(pa.x.total_cmp(&pb.x))
+                    .then(a.cmp(b))
+            }),
+            ArrangeOp::StackRow(_) => ids.sort_by(|a, b| {
+                let (pa, pb) = (position(a), position(b));
+                pa.x.total_cmp(&pb.x)
+                    .then(pa.y.total_cmp(&pb.y))
+                    .then(a.cmp(b))
+            }),
+            _ => ids.sort_unstable(),
+        }
+        let targets = crate::layout::arrange(network, &self.node_type_registry, &sizes, &ids, op);
+
+        let mut moves: Vec<(u64, glam::f64::DVec2, glam::f64::DVec2)> = targets
+            .into_iter()
+            .filter_map(|(id, to)| {
+                let from = network.nodes.get(&id)?.position;
+                (from != to).then_some((id, from, to))
+            })
+            .collect();
+        if moves.is_empty() {
+            return false;
+        }
+        moves.sort_by_key(|&(id, _, _)| id);
+        let hand_moved_before: Vec<(u64, bool)> = moves
+            .iter()
+            .map(|&(id, _, _)| (id, network.nodes[&id].hand_moved))
+            .collect();
+
+        let Some(network) = self.get_scope_network_mut(scope_path) else {
+            return false;
+        };
+        for &(id, _, to) in &moves {
+            if let Some(node) = network.nodes.get_mut(&id) {
+                node.position = to;
+                node.hand_moved = true;
+            }
+        }
+
+        let description = match op {
+            ArrangeOp::AlignLeft => "Align left",
+            ArrangeOp::AlignRight => "Align right",
+            ArrangeOp::AlignTop => "Align top",
+            ArrangeOp::AlignBottom => "Align bottom",
+            ArrangeOp::StackColumn(_) => "Stack as column",
+            ArrangeOp::StackRow(_) => "Stack as row",
+            ArrangeOp::DistributeVertically => "Distribute vertically",
+            ArrangeOp::DistributeHorizontally => "Distribute horizontally",
+            ArrangeOp::Straighten => "Straighten wires",
+            ArrangeOp::Layout => "Arrange selection",
+        };
+        self.push_command(super::undo::commands::move_nodes::MoveNodesCommand {
+            network_name,
+            scope_path: scope_path.to_vec(),
+            moves,
+            description: description.to_string(),
+            hand_moved_before,
+        });
+        self.set_dirty(true);
+        true
     }
 
     /// Auto-layout the active network — **every scope of it** — with the

@@ -7,7 +7,8 @@
 //! there is no test here asserting that a flagged node is immovable — that
 //! would be pinning the wrong contract.
 //!
-//! What is pinned: exactly one path sets it (the drag), it survives the file
+//! What is pinned: the drag sets it (the Arrange menu is the only other setter,
+//! pinned in `layout_arrange_test.rs`), it survives the file
 //! and the clipboard, an older file loads without it, and one Ctrl+Z takes back
 //! both the position and the claim.
 

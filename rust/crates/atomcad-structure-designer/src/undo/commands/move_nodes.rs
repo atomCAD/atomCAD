@@ -16,8 +16,10 @@ pub struct MoveNodesCommand {
     pub moves: Vec<(u64, DVec2, DVec2)>,
     pub description: String,
     /// `(node_id, hand_moved before this command)` for every node whose
-    /// `hand_moved` flag this command sets. Populated **only** by the hand-drag
-    /// path (`StructureDesigner::end_move_nodes`); every programmatic move —
+    /// `hand_moved` flag this command sets. Populated **only** by the two
+    /// deliberate human placements — the hand drag
+    /// (`StructureDesigner::end_move_nodes`) and the Arrange menu
+    /// (`StructureDesigner::arrange_selected_nodes`); every programmatic move —
     /// reflow, inlining, auto-layout — leaves it empty and so leaves the flags
     /// alone.
     ///

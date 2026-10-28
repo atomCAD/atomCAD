@@ -9723,6 +9723,30 @@ pub fn layout_active_network() -> bool {
     }
 }
 
+/// Apply an Arrange command to the selected nodes of the scope at `scope_path`
+/// (`doc/design_deliberate_node_placement.md` B2): one undo step, only the
+/// selected nodes move, nothing is pushed.
+///
+/// Returns true if anything moved (and so an undo step was pushed).
+#[flutter_rust_bridge::frb(sync)]
+pub fn arrange_selected_nodes(
+    scope_path: Vec<u64>,
+    op: super::structure_designer_api_types::APIArrangeOp,
+) -> bool {
+    unsafe {
+        with_mut_cad_instance_or(
+            |cad_instance| {
+                let changed = cad_instance
+                    .structure_designer
+                    .arrange_selected_nodes(&scope_path, op.into());
+                refresh_structure_designer_auto(cad_instance);
+                changed
+            },
+            false,
+        )
+    }
+}
+
 /// Get information about whether/how the current selection can be factored into a subnetwork.
 ///
 /// Returns information that can be used to populate the "Factor into Subnetwork" dialog,

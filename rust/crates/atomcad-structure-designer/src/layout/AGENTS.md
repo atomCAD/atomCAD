@@ -10,7 +10,8 @@ Automatic layout algorithms for repositioning nodes in a network.
 | `delta.rs` | `EditDelta` / `diff_scope` — the incremental pass's input |
 | `motion.rs` | `shift_half_plane` / `cascade` / `grow_rect` — the two motion primitives (see below) |
 | `incremental.rs` | The incremental pass, step by step (all eight, and the driver) |
-| `common.rs` | Shared types and constants, depth computation, and the comment-placement pass |
+| `common.rs` | Shared types and constants (`Gap`: the three gap words), depth computation, and the comment-placement pass |
+| `arrange.rs` | `arrange(scope, registry, sizes, ids, ArrangeOp)` — align / stack / distribute / straighten / subset layout over chosen nodes (see below) |
 | `topological_grid.rs` | Simple layered layout (fast, reliable) |
 | `sugiyama.rs` | Sugiyama-style layout with crossing minimization |
 
@@ -232,6 +233,11 @@ before and the after side.
 
 ## `hand_moved` is a tiebreaker, in exactly two places
 
+It is set only by deliberate human placements: a drag (`end_move_nodes`) and
+an Arrange command (`arrange_selected_nodes`), each inside its
+`MoveNodesCommand` so one Ctrl+Z takes back the claim too. Nothing automatic
+sets it.
+
 `Node::hand_moved` (D5) never blocks a repair — the pass reads it only where it
 already had a free choice, and both sites have a control test with the flag off:
 
@@ -277,6 +283,26 @@ therefore keeps the default and is cut in two by a shift. The rule works where
 there is whitespace within reach, which
 `a_loose_column_straddling_the_shift_line_moves_as_a_whole` pins; widening its
 reach is a design change, not a fix.
+
+## `arrange.rs`: one implementation for the GUI and the AI
+
+`doc/design_deliberate_node_placement.md` (B2, A2). The Arrange menu and the
+AI's `arrange` / `straighten` statements and `[…] column` / `row` groups use
+the same words, so they use this one function. Two rules:
+
+- **It is pure and returns positions for listed nodes only.** The caller
+  commits. The GUI commits through one `MoveNodesCommand` and pushes nothing
+  (D11); the AI path commits through placement, which pushes. Do not add a
+  cascade here, or the GUI starts moving unselected nodes.
+- **Pin heights come from Flutter's formula, not `node_layout`'s.**
+  `node_layout::input_pin_position` / `output_pin_position` sit every pin half
+  a row (11 px) above where Flutter draws it. That cancels between two
+  ordinary pins, which is why the comment pass gets away with it, but not
+  against a title-bar pin (the function pin, a `closure`'s output, 16 px).
+  `straighten` therefore uses its own offsets mirroring
+  `ScopeResolver._pinPositionNormal`.
+
+Gaps go through `common::Gap` (`across()` / `down()`), never a literal.
 
 ## `layout_subgraph`: the same algorithms over a subset
 

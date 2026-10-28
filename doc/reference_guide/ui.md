@@ -348,6 +348,19 @@ The node network editor canvas can be panned the following way:
 
 A node snaps when it comes within 6 screen pixels of one of these, at any zoom. When several are in range, a straight wire wins, then an aligned edge, then the normal gap, then equal spacing; among equals, the nearest. Move on past it and the node follows the pointer again. Only nodes on screen and in the same scope count (inside a higher-order function's body, only that body's nodes), comments included. When you drag several selected nodes, the one under the pointer snaps and the rest move with it. Hold **Alt** to drag without snapping, or turn snapping off with *Snap while dragging* in [Layout preferences](#layout). While a dragged node highlights a wire it would be inserted into, it does not snap. The guides only appear while you drag; nothing about them is saved.
 
+**Arranging a selection.** Select two or more nodes, right-click one of them and choose **Arrange ▸** for a second menu of commands that tidy just those nodes:
+
+| Command | What it does |
+|---|---|
+| Align left / right / top / bottom | Lines that edge of every selected node up with the outermost one. |
+| Stack as column | Puts the nodes one under the other, in their current top-to-bottom order, left edges on the leftmost one, the normal gap (30) apart. |
+| Stack as row | Puts the nodes side by side, in their current left-to-right order, top edges on the topmost one, the normal gap (50) apart. |
+| Distribute vertically / horizontally | Keeps the two outermost nodes where they are and makes the gaps between the ones in between equal. |
+| Straighten wires | Moves each node up or down until the wire into its first connected input runs horizontal. A chain straightens in one go, from its upstream end; a node fed from outside the selection lines up with that node, which stays put. |
+| Arrange selection | Lays the selected nodes out among themselves, the way *Auto-Layout Network* would, keeping the group's top-left corner where it was. |
+
+Only the selected nodes move. Nothing else is pushed out of the way, so if the result lands on another node, move it yourself or undo. Each command is one undo step, and like a drag it counts as placing the nodes by hand (see *Auto-Layout keeps manually placed nodes in place* in [Layout preferences](#layout)). The same commands work inside a higher-order function's body, on a selection there.
+
 If you get lost you can use the *View > Reset node network view* menu item.
 
 The node network can be zoomed using the mouse scroll wheel.
@@ -1249,7 +1262,7 @@ How the [3D viewport](#3d-viewport) is drawn. *Anti-aliasing* and *Full display 
 | Setting | Description |
 |---------|-------------|
 | Auto-layout algorithm | *Topological Grid* or *Sugiyama*. Controls which algorithm is used by *Edit > Auto-Layout Network*, and which one arranges the nodes a new edit adds. |
-| Auto-Layout keeps manually placed nodes in place | When enabled, a full *Auto-Layout Network* leaves every node you have dragged by hand exactly where it is and arranges the rest around them. Off by default: a reflow you asked for is normally meant to be total. |
+| Auto-Layout keeps manually placed nodes in place | When enabled, a full *Auto-Layout Network* leaves every node you have placed by hand — by dragging it or with an *Arrange* command — exactly where it is and arranges the rest around them. Off by default: a reflow you asked for is normally meant to be total. |
 | Snap while dragging | When enabled (the default), a node you drag snaps to straight wires, aligned edges and even gaps, with guides showing why. See [Snapping guides](#navigating-in-the-node-network-editor-panel). Holding **Alt** skips snapping for one drag. |
 
 ### Background

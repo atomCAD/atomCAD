@@ -2016,6 +2016,14 @@ class NodeWidget extends StatelessWidget {
         model.selectedNodeIdsAt(scopeChain).length <= 1 &&
         model.canDissolveNode(node.id, scopeChain: scopeChain);
 
+    // Arrange ▸ (`doc/design_deliberate_node_placement.md` B2): offered when
+    // the right-clicked node is part of a selection of two or more in its
+    // scope (selection never spans scopes). The commands live in a second
+    // menu, since the flat `showMenu` has no native cascade.
+    final bool canArrange = !readOnly &&
+        node.selected &&
+        model.selectedNodeIdsAt(scopeChain).length >= 2;
+
     // Take type from wire (`doc/design_wire_declared_inputs.md`): the indices
     // of this node's stale declared inputs, computed now like the other gates.
     // Empty for a node without declared inputs, so the item stays hidden.
@@ -2106,6 +2114,11 @@ class NodeWidget extends StatelessWidget {
         const PopupMenuItem(
           value: 'dissolve',
           child: Text('Dissolve (Ctrl+Del)'),
+        ),
+      if (canArrange)
+        const PopupMenuItem(
+          value: 'arrange',
+          child: Text('Arrange ▸'),
         ),
       // Issue #359. The canvas error surface is a `Tooltip`, which is an
       // overlay that dismisses on pointer-exit and does not accept
@@ -2283,6 +2296,8 @@ class NodeWidget extends StatelessWidget {
         final model =
             Provider.of<StructureDesignerModel>(context, listen: false);
         model.cutSelection();
+      } else if (value == 'arrange') {
+        _showArrangeMenu(context, position);
       } else if (value == 'dissolve') {
         final model =
             Provider.of<StructureDesignerModel>(context, listen: false);
@@ -2339,6 +2354,42 @@ class NodeWidget extends StatelessWidget {
             Provider.of<StructureDesignerModel>(context, listen: false);
         model.setCollapseMode(scopeChain, node.id, APICollapseMode.collapsed);
       }
+    });
+  }
+
+  /// The Arrange submenu, opened where the node menu was. Each command is one
+  /// undo step applied to the selection in this node's scope.
+  void _showArrangeMenu(BuildContext context, RelativeRect position) {
+    const groups = [
+      [
+        ('Align left', APIArrangeOp.alignLeft),
+        ('Align right', APIArrangeOp.alignRight),
+        ('Align top', APIArrangeOp.alignTop),
+        ('Align bottom', APIArrangeOp.alignBottom),
+      ],
+      [
+        ('Stack as column', APIArrangeOp.stackColumn),
+        ('Stack as row', APIArrangeOp.stackRow),
+        ('Distribute vertically', APIArrangeOp.distributeVertically),
+        ('Distribute horizontally', APIArrangeOp.distributeHorizontally),
+      ],
+      [
+        ('Straighten wires', APIArrangeOp.straighten),
+        ('Arrange selection', APIArrangeOp.layout),
+      ],
+    ];
+    final List<PopupMenuEntry<APIArrangeOp>> items = [];
+    for (final group in groups) {
+      if (items.isNotEmpty) items.add(const PopupMenuDivider());
+      for (final (label, op) in group) {
+        items.add(PopupMenuItem(value: op, child: Text(label)));
+      }
+    }
+    showMenu<APIArrangeOp>(context: context, position: position, items: items)
+        .then((op) {
+      if (op == null || !context.mounted) return;
+      Provider.of<StructureDesignerModel>(context, listen: false)
+          .arrangeSelectedNodes(op, scopeChain: scopeChain);
     });
   }
 

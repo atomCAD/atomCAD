@@ -104,6 +104,9 @@ mod layout_delta_test;
 #[path = "structure_designer/layout_columns_test.rs"]
 mod layout_columns_test;
 
+#[path = "structure_designer/layout_arrange_test.rs"]
+mod layout_arrange_test;
+
 #[path = "structure_designer/layout_hand_moved_test.rs"]
 mod layout_hand_moved_test;
 
@@ -782,14 +785,14 @@ mod record_destructure_anonymous_test;
 mod call_site_undo_test;
 #[path = "structure_designer/dissolve_node_test.rs"]
 mod dissolve_node_test;
-#[path = "structure_designer/move_wires_test.rs"]
-mod move_wires_test;
 #[path = "structure_designer/expr_named_record_node_test.rs"]
 mod expr_named_record_node_test;
 #[path = "structure_designer/insert_dissolve_corpus_test.rs"]
 mod insert_dissolve_corpus_test;
 #[path = "structure_designer/insert_node_on_wire_test.rs"]
 mod insert_node_on_wire_test;
+#[path = "structure_designer/move_wires_test.rs"]
+mod move_wires_test;
 #[path = "structure_designer/record_get_anonymous_test.rs"]
 mod record_get_anonymous_test;
 #[path = "structure_designer/splice_plan_test.rs"]

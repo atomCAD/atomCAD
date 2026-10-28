@@ -2126,6 +2126,19 @@ class StructureDesignerModel extends ChangeNotifier {
     return changed;
   }
 
+  /// Apply an Arrange command to the selection in the scope at [scopeChain]
+  /// (`doc/design_deliberate_node_placement.md` B2). One undo step; only the
+  /// selected nodes move and nothing is pushed out of their way.
+  ///
+  /// Returns whether anything moved (and so whether an undo step exists).
+  bool arrangeSelectedNodes(APIArrangeOp op,
+      {List<BigInt> scopeChain = const []}) {
+    final changed = structure_designer_api.arrangeSelectedNodes(
+        scopePath: scopeChainToBytes(scopeChain), op: op);
+    refreshFromKernel();
+    return changed;
+  }
+
   // ===== UNDO/REDO =====
 
   /// Whether there are commands that can be undone.

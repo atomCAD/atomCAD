@@ -277,6 +277,46 @@ pub const COLUMN_GAP: f64 = COLUMN_WIDTH - node_layout::NODE_WIDTH;
 /// Vertical gap between two nodes stacked in the same column.
 pub const VERTICAL_GAP: f64 = 30.0;
 
+/// A gap between two neighbouring nodes, in the three words the layout
+/// vocabulary uses plus an exact number
+/// (`doc/design_deliberate_node_placement.md` D10).
+///
+/// The one place the words' numbers live: the Arrange commands, the AI's
+/// layout statements and the read-out's group thresholds all ask this type, so
+/// none of them repeats a number. `Normal` is today's spacing on both axes
+/// (`DEFAULT_HORIZONTAL_GAP` across, [`VERTICAL_GAP`] down); `Tight` halves it
+/// and `Wide` doubles it.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Gap {
+    Tight,
+    Normal,
+    Wide,
+    /// An exact gap in logical pixels, the same on both axes.
+    Px(f64),
+}
+
+impl Gap {
+    /// The gap between two nodes side by side (x).
+    pub fn across(self) -> f64 {
+        match self {
+            Gap::Tight => node_layout::DEFAULT_HORIZONTAL_GAP / 2.0,
+            Gap::Normal => node_layout::DEFAULT_HORIZONTAL_GAP,
+            Gap::Wide => node_layout::DEFAULT_HORIZONTAL_GAP * 2.0,
+            Gap::Px(px) => px,
+        }
+    }
+
+    /// The gap between two nodes stacked one under the other (y).
+    pub fn down(self) -> f64 {
+        match self {
+            Gap::Tight => VERTICAL_GAP / 2.0,
+            Gap::Normal => VERTICAL_GAP,
+            Gap::Wide => VERTICAL_GAP * 2.0,
+            Gap::Px(px) => px,
+        }
+    }
+}
+
 /// Gap between a comment and the box it is anchored to (tier 1).
 const ANCHOR_GAP: f64 = 24.0;
 /// How far outside the graph's bounding box a gutter-placed comment sits.
