@@ -340,6 +340,7 @@ fn canonicalize_network_flattens_closure_data_type_args() {
         collapse_mode: CollapseMode::Auto,
         function_pin_roles: std::collections::BTreeMap::new(),
         hand_moved: false,
+        ai_placed: false,
     };
     network.nodes.insert(7, node);
     network.next_node_id = 8;
@@ -403,6 +404,7 @@ fn canonicalize_network_flattens_map_data_output_type() {
         collapse_mode: CollapseMode::Auto,
         function_pin_roles: std::collections::BTreeMap::new(),
         hand_moved: false,
+        ai_placed: false,
     };
     network.nodes.insert(3, node);
     network.next_node_id = 4;

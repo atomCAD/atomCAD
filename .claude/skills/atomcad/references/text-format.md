@@ -393,7 +393,9 @@ atomcad-cli edit --dry-run --code="sphere1 = sphere { radius: 10 }"
 
 The text format itself has no positions. Where an edit put new nodes, and which
 existing ones it moved and why, comes back in the result's `layout` section
-(see the skill's "The `layout` section").
+(see the skill's "The `layout` section"). Where nodes are now is what
+`atomcad-cli query --layout` prints (see the skill's "`query --layout`"); its
+names are the names this format uses.
 
 ## Node ID Reuse
 

@@ -69,6 +69,7 @@ fn positions(entries: &[(&[&str], DVec2)]) -> PositionSnapshot {
                     body_height: 180.0,
                     collapse_mode: CollapseMode::Auto,
                     hand_moved: false,
+                    ai_placed: false,
                 },
             )
         })

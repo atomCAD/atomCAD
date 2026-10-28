@@ -24,12 +24,14 @@ use crate::ai_edit_log::{
 use crate::layout;
 use crate::layout::LayoutReport;
 use crate::network_validator::validate_network;
+use crate::node_network::NodeNetwork;
 use crate::node_type_registry::NodeTypeRegistry;
 use crate::scoped_validation_errors::{collect_scoped_validation_errors, error_node_path};
 use crate::serialization::node_networks_serialization::node_network_to_serializable;
 use crate::structure_designer::StructureDesigner;
 use crate::text_format::{
-    EditResult, edit_network as text_edit_network, serialize_network, snapshot_node_positions,
+    EditResult, NamePath, PositionSnapshot, edit_network as text_edit_network, serialize_network,
+    snapshot_node_positions, unique_node_names,
 };
 use crate::undo::UndoRefreshMode;
 use crate::undo::commands::text_edit_network::TextEditNetworkCommand;
@@ -330,6 +332,21 @@ impl StructureDesigner {
             }
         }
 
+        // --- Ownership (`doc/design_deliberate_node_placement.md` D12) ----
+        //
+        // Every node this edit created is the AI's until a human positions
+        // it. "Created" is the identity match the layout pass used: a name
+        // path absent from the pre-edit snapshot, so a `--replace` that
+        // recreates a node under its old name does not change its owner (the
+        // editor carried the flag across with the rest of its state). Set
+        // before the undo snapshot below, which does not record it anyway: the
+        // flag is runtime-only, and a redo makes the nodes the user's.
+        if edit_applied
+            && let Some(network) = self.node_type_registry.node_networks.get_mut(&network_name)
+        {
+            mark_created_nodes_ai_placed(network, &before_positions);
+        }
+
         // --- The log's "after" pair, and the layout outcome (D9) ---------
         //
         // Taken past validation and past layout, so a partially-applied edit
@@ -431,6 +448,14 @@ impl StructureDesigner {
                         &call_sites,
                     );
                 });
+                // The restore rebuilt the network from its serialized form,
+                // which does not carry the runtime-only `ai_placed` (D12). A
+                // preview must not hand the AI's nodes to the user, so the
+                // flags go back from the identity snapshot.
+                if let Some(network) = self.node_type_registry.node_networks.get_mut(&network_name)
+                {
+                    restore_ai_placed(network, &before_positions);
+                }
             }
             return AiTextEditOutcome {
                 result,
@@ -516,6 +541,29 @@ impl StructureDesigner {
         }
     }
 
+    /// The layout read-out of the active network
+    /// (`doc/design_deliberate_node_placement.md` A1, `query --layout`): the
+    /// boxes of the nodes `nodes` / `bbox` select in the scope `scope`, plus
+    /// the drawing's extent and its inferred groups. The three arguments are
+    /// as the transports deliver them (see [`layout::parse_readout_args`]),
+    /// empty when absent.
+    ///
+    /// Read-only, like `query`: it reaches nothing but the network. A problem
+    /// comes back as a `# Error: …` line, the way `query` reports one.
+    pub fn query_active_layout(&self, scope: &str, nodes: &str, bbox: &str) -> String {
+        let Some(name) = self.active_node_network_name.as_deref() else {
+            return "# No active node network\n".to_string();
+        };
+        let Some(network) = self.node_type_registry.node_networks.get(name) else {
+            return format!("# Network '{}' not found\n", name);
+        };
+        layout::parse_readout_args(scope, nodes, bbox)
+            .and_then(|(scope, filter)| {
+                layout::layout_readout(network, &self.node_type_registry, name, &scope, &filter)
+            })
+            .unwrap_or_else(|message| format!("# Error: {}\n", message))
+    }
+
     /// Log an edit that never reached the network and build its `EditResult`.
     /// A dry run is not logged, rejected or not.
     fn reject_ai_edit(
@@ -536,4 +584,87 @@ impl StructureDesigner {
         }
         AiTextEditOutcome::rejected(errors, dry_run)
     }
+}
+
+/// Set [`ai_placed`](crate::node_network::Node::ai_placed) on every node of
+/// `network`, bodies included, whose name path `before` does not hold: the
+/// nodes an edit created. Names are the text format's
+/// ([`unique_node_names`]), the key [`snapshot_node_positions`] uses, so this
+/// and the layout pass agree on what is new.
+fn mark_created_nodes_ai_placed(network: &mut NodeNetwork, before: &PositionSnapshot) {
+    fn walk(network: &mut NodeNetwork, before: &PositionSnapshot, prefix: &mut NamePath) {
+        let names = unique_node_names(network);
+        let mut ids: Vec<u64> = network.nodes.keys().copied().collect();
+        ids.sort_unstable();
+        for id in ids {
+            let Some(name) = names.get(&id) else {
+                continue;
+            };
+            prefix.push(name.clone());
+            let created = !before.contains_key(prefix.as_slice());
+            let node = network.nodes.get_mut(&id).expect("id from this map");
+            if created {
+                node.ai_placed = true;
+            }
+            // A new HOF's body is all new; an old one's may hold new nodes.
+            // Only descend where something can change, so an untouched body
+            // keeps sharing its storage.
+            let descend = node.zone.as_deref().is_some_and(|body| {
+                let mut any = false;
+                walk_names(body, prefix, &mut |path| any |= !before.contains_key(path));
+                any
+            });
+            if descend && let Some(body) = node.zone_mut() {
+                walk(body, before, prefix);
+            }
+            prefix.pop();
+        }
+    }
+    /// Visit the name path of every node of `network`, bodies included.
+    fn walk_names(network: &NodeNetwork, prefix: &mut NamePath, f: &mut impl FnMut(&[String])) {
+        let names = unique_node_names(network);
+        for (id, node) in &network.nodes {
+            let Some(name) = names.get(id) else {
+                continue;
+            };
+            prefix.push(name.clone());
+            f(prefix);
+            if let Some(body) = node.zone.as_deref() {
+                walk_names(body, prefix, f);
+            }
+            prefix.pop();
+        }
+    }
+    walk(network, before, &mut Vec::new());
+}
+
+/// Set every node's [`ai_placed`](crate::node_network::Node::ai_placed) to
+/// what `snapshot` recorded for its name path (false for a path it lacks).
+/// Bodies are only forked where a flag actually changes.
+fn restore_ai_placed(network: &mut NodeNetwork, snapshot: &PositionSnapshot) {
+    fn walk(network: &mut NodeNetwork, snapshot: &PositionSnapshot, prefix: &mut NamePath) {
+        let names = unique_node_names(network);
+        let mut ids: Vec<u64> = network.nodes.keys().copied().collect();
+        ids.sort_unstable();
+        for id in ids {
+            let Some(name) = names.get(&id) else {
+                continue;
+            };
+            prefix.push(name.clone());
+            let node = network.nodes.get_mut(&id).expect("id from this map");
+            node.ai_placed = snapshot
+                .get(prefix.as_slice())
+                .is_some_and(|state| state.ai_placed);
+            let any_flagged = node.zone.as_deref().is_some_and(|_| {
+                snapshot.iter().any(|(path, state)| {
+                    state.ai_placed && path.len() > prefix.len() && path.starts_with(prefix)
+                })
+            });
+            if any_flagged && let Some(body) = node.zone_mut() {
+                walk(body, snapshot, prefix);
+            }
+            prefix.pop();
+        }
+    }
+    walk(network, snapshot, &mut Vec::new());
 }

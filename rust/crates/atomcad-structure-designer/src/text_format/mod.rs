@@ -50,7 +50,7 @@ pub use network_editor::{
     EditResult, NamePath, NetworkEditor, NodeLayoutState, PIN_ROLES_PROPERTY, PositionSnapshot,
     edit_network, snapshot_node_positions, unique_node_names,
 };
-pub use network_serializer::{NetworkSerializer, serialize_network};
+pub use network_serializer::{NetworkSerializer, format_identifier, serialize_network};
 pub use node_type_introspection::{describe_node_type, get_display_summary, truncate_description};
 pub use parser::{Lexer, ParseError, Parser, PropertyValue, Statement, Token, TokenInfo};
 pub use serializer::{TextFormatter, format_float};

@@ -1,0 +1,137 @@
+---
+source: crates/atomcad-structure-designer/tests/structure_designer/layout_readout_test.rs
+assertion_line: 367
+expression: out
+---
+=== demo_rack_x: no filter
+# demo_rack_x: extent (-474,-586)–(2295,1033), 52 nodes
+int7                                   14,-586    160×83
+`lib_irod_x_rect◇{110}_centered1`      410,-585   160×104
+parameter3                             215,-584   160×83
+structure_move1                        608,-579   160×146
+ivec33                                 273,-401   160×124
+lib_iwall_positive1                    493,-367   160×104
+intersect2                             958,-349   160×63
+int1                                   83,-258    160×83
+parameter2                             285,-253   160×83
+diff3                                  1177,-242  160×82
+structure_move3                        512,-151   160×126
+`lib_iedge_x_z_‹{110}1`                218,-146   160×63
+diff2                                  1623,-125  160×82
+int9                                   -7,-78     160×83
+ivec34                                 255,-69    160×104
+structure_move2                        1404,-60   160×146
+structure_move4                        510,-32    160×126
+int10                                  -156,16    160×83
+parameter6                             25,18      160×83
+atom_fill_halfshift1                   2135,21    160×82
+diff1                                  1908,22    160×82
+int8                                   1147,40    160×83
+structure_move5                        794,44     160×146
+`lib_irod_x_rect◇{110}_centered2`      1335,57    160×104
+ivec35                                 267,64     160×104
+int11                                  -140,106   160×83
+parameter7                             43,108     160×83
+half_space1                            554,112    160×168
+lattice_vecs1                          -474,204   160×124
+ivec37                                 342,209    160×124
+parameter1                             -293,230   160×83
+int13                                  987,292    160×83
+ivec36                                 683,357    160×124
+lib_map_multimove1                     1465,377   160×148
+parameter8                             1020,386   160×83
+ivec32                                 1245,439   160×104
+structure_rot1                         680,484    160×126
+int12                                  1019,488   160×83
+`lib_irod_xy_rhombic♢{111}_centered1`  296,536    160×104
+int2                                   35,555     160×83
+int4                                   1246,575   160×83
+intersect1                             904,617    160×63
+ivec31                                 37,658     160×124
+int5                                   1251,665   160×83
+lib_iwall_centered1                    306,710    160×104
+int6                                   1072,756   160×83
+parameter4                             1257,757   160×83
+int3                                   52,791     160×83
+expr1                                  594,846    160×83
+expr2                                  412,897    160×83
+parameter5                             212,928    160×83
+bool1                                  19,950     160×83
+# groups (inferred)
+column  ivec36, structure_rot1                                                gap 3
+column  parameter8, int12                                                     gap 19
+column  ivec32, int4, int5                                                    gap 19
+column  int2, ivec31                                                          gap 19
+row     int10, parameter6                                                     gap 21
+row     int11, parameter7                                                     gap 22
+row     int7, parameter3, `lib_irod_x_rect◇{110}_centered1`, structure_move1  gap 39
+row     int1, parameter2                                                      gap 43
+row     int6, parameter4                                                      gap 25
+row     diff1, atom_fill_halfshift1                                           gap 67
+=== demo_rack_x: --nodes `lib_irod_x_rect◇{110}_centered1`,int7,no_such_node
+# demo_rack_x: extent (-474,-586)–(2295,1033), 52 nodes; 2 listed
+int7                               14,-586   160×83
+`lib_irod_x_rect◇{110}_centered1`  410,-585  160×104
+no_such_node                       (no such node)
+# groups (inferred)
+row  int7, …, `lib_irod_x_rect◇{110}_centered1`, …  gap 39
+=== demo_rack_x: --box 0,0,400,300
+# demo_rack_x: extent (-474,-586)–(2295,1033), 52 nodes; 8 in box (0,0)–(400,300)
+int9        -7,-78    160×83
+ivec34      255,-69   160×104
+int10       -156,16   160×83
+parameter6  25,18     160×83
+ivec35      267,64    160×104
+int11       -140,106  160×83
+parameter7  43,108    160×83
+ivec37      342,209   160×124
+# groups (inferred)
+row  int10, parameter6  gap 21
+row  int11, parameter7  gap 22
+=== lib_iwall_positive: no filter
+# lib_iwall_positive: extent (-130,-51)–(1607,562), 17 nodes
+parameter3                 251,-51   160×83
+lattice_vecs1              53,-33    160×124
+ivec31                     254,42    160×124
+structure2                 327,148   160×126
+half_space1                477,148   160×148
+expr1                      255,183   160×83
+ivec32                     -130,199  160×124
+parameter1                 59,199    160×83
+`lib_test-by-sphere-cut1`  1193,245  160×126
+atom_fill_halfshift1       1443,247  160×82
+intersect1                 664,249   160×63
+structure1                 328,292   160×126
+half_space2                478,292   160×148
+int1                       255,336   160×83
+materialize1               1447,348  160×214
+int2                       61,408    160×83
+parameter2                 256,410   160×83
+# groups (inferred)
+column  parameter3, ivec31, expr1                        gap 14
+column  structure2, structure1                           gap 18
+column  atom_fill_halfshift1, materialize1               gap 20
+row     ivec32, parameter1                               gap 30
+row     int2, parameter2                                 gap 35
+row     `lib_test-by-sphere-cut1`, atom_fill_halfshift1  gap 90
+=== lib_iwall_positive: --nodes lattice_vecs1,parameter3,no_such_node
+# lib_iwall_positive: extent (-130,-51)–(1607,562), 17 nodes; 2 listed
+parameter3     251,-51  160×83
+lattice_vecs1  53,-33   160×124
+no_such_node   (no such node)
+# groups (inferred)
+column  parameter3, …  gap 14
+=== lib_iwall_positive: --box 0,0,400,300
+# lib_iwall_positive: extent (-130,-51)–(1607,562), 17 nodes; 8 in box (0,0)–(400,300)
+parameter3     251,-51   160×83
+lattice_vecs1  53,-33    160×124
+ivec31         254,42    160×124
+structure2     327,148   160×126
+expr1          255,183   160×83
+ivec32         -130,199  160×124
+parameter1     59,199    160×83
+structure1     328,292   160×126
+# groups (inferred)
+column  parameter3, ivec31, expr1  gap 14
+column  structure2, structure1     gap 18
+row     ivec32, parameter1         gap 30

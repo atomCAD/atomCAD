@@ -96,6 +96,7 @@ pub fn copy_content_into(
             collapse_mode: old_node.collapse_mode,
             function_pin_roles: old_node.function_pin_roles.clone(),
             hand_moved: old_node.hand_moved,
+            ai_placed: false,
         };
         target.nodes.insert(new_id, new_node);
 

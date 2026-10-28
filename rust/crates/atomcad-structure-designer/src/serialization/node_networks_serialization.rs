@@ -712,6 +712,8 @@ pub fn serializable_to_node(
         // undo command's `Option<FunctionPinRole>` mirroring entry presence.
         function_pin_roles: prune_auto_function_pin_roles(&serializable.function_pin_roles),
         hand_moved: serializable.hand_moved,
+        // Runtime-only (D12): a loaded node is the user's.
+        ai_placed: false,
     })
 }
 

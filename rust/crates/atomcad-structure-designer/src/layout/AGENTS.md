@@ -11,6 +11,7 @@ Automatic layout algorithms for repositioning nodes in a network.
 | `motion.rs` | `shift_half_plane` / `cascade` / `grow_rect` — the two motion primitives (see below) |
 | `incremental.rs` | The incremental pass, step by step (all eight, and the driver) |
 | `report.rs` | `LayoutReport`: moved nodes with their causes, new nodes' boxes, findings (see below) |
+| `readout.rs` | `layout_readout` — `query --layout`: one scope's boxes, tags and inferred groups (see below) |
 | `common.rs` | Shared types and constants (`Gap`: the three gap words), depth computation, and the comment-placement pass |
 | `arrange.rs` | `arrange(scope, registry, sizes, ids, ArrangeOp)` — align / stack / distribute / straighten / subset layout over chosen nodes (see below) |
 | `topological_grid.rs` | Simple layered layout (fast, reliable) |
@@ -306,6 +307,32 @@ therefore keeps the default and is cut in two by a shift. The rule works where
 there is whitespace within reach, which
 `a_loose_column_straddling_the_shift_line_moves_as_a_whole` pins; widening its
 reach is a design change, not a fix.
+
+## `readout.rs` and `Node::ai_placed`: what the AI is shown
+
+`doc/design_deliberate_node_placement.md` A1 / D12. The read-out prints one
+scope as plain boxes in stored coordinates (body-local inside a body), names
+spelled by `unique_node_names` + `format_identifier` exactly as `query` spells
+them. Three rules:
+
+- **Groups use the motion code's constants, never their own.** Lefts/tops
+  within `motion::COLUMN_TOLERANCE`, gaps up to `Gap::Wide`, so the read-out
+  and the window rule agree on what a column is. Groups are detected over the
+  whole scope and only *filtered* for display; a box that cuts a column must
+  not cut the group.
+- **The `ai` tag is `Node::ai_placed`, which is runtime-only.** It is not in
+  `SerializableNode`, so anything rebuilt from the serialized form (load, the
+  undo snapshot restores, a `--dry-run`'s revert) comes back untagged — the
+  safe direction. The one path that must not lose it is the dry run, which
+  promises to change nothing: `ai_text_edit` re-applies the flags from the
+  pre-edit `PositionSnapshot` (which carries them, as `--replace` needs) after
+  the revert. A new restore path that must be invisible needs the same.
+- **Set in exactly one place, cleared in two.** `ai_text_edit` tags the nodes
+  whose name path the pre-edit snapshot lacks (the incremental pass's own
+  notion of "added"); `end_move_nodes` and `arrange_selected_nodes` clear it
+  inside their `MoveNodesCommand` (`ai_placed_before`), so Ctrl+Z gives the
+  node back to the AI. Copies (paste, duplicate, factoring, inlining) start
+  untagged, bodies included.
 
 ## `arrange.rs`: one implementation for the GUI and the AI
 

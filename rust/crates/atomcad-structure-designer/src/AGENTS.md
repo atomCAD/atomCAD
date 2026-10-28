@@ -417,7 +417,10 @@ network"`) and **one entry in `StructureDesigner::ai_edit_log`**
   command, writes no log entry (rejections included), sets no dirty flag and
   asks for no refresh. A new side effect added to `ai_text_edit` needs the
   same treatment (`layout_report_test.rs` pins the undo stack, log and dirty
-  flag; the corpus run pins the design text).
+  flag; the corpus run pins the design text). The restore rebuilds the
+  network from `.cnnd` form, so **runtime-only node state is lost by it** and
+  must be put back by hand: today that is `Node::ai_placed`
+  (`layout/AGENTS.md`), re-applied from the pre-edit `PositionSnapshot`.
 
 **The log is wider than its name** since Phase 5: `AiEditLog` holds a *second*
 ring of `AiActivityRecord`s — every non-edit CLI request (`/query`,

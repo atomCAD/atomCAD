@@ -1379,6 +1379,7 @@ mod resolve_output_type_tests {
             collapse_mode: atomcad_structure_designer::node_network::CollapseMode::Auto,
             function_pin_roles: std::collections::BTreeMap::new(),
             hand_moved: false,
+            ai_placed: false,
         }
     }
 

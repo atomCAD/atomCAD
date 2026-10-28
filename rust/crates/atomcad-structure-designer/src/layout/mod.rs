@@ -35,6 +35,8 @@
 //! - `motion.rs` - `shift_half_plane` / `cascade` / `grow_rect`, the two
 //!   motion primitives the incremental pass repairs a drawing with
 //! - `incremental.rs` - the incremental pass itself, step by step
+//! - `report.rs` - the edit result's `layout` section
+//! - `readout.rs` - `query --layout`: the drawing as boxes, plus inferred groups
 //! - `topological_grid.rs` - Simple, reliable layered layout
 //! - `sugiyama.rs` - Sophisticated layout with crossing minimization
 
@@ -43,6 +45,7 @@ pub mod common;
 pub mod delta;
 pub mod incremental;
 pub mod motion;
+pub mod readout;
 pub mod report;
 pub mod size;
 pub mod sugiyama;
@@ -63,6 +66,7 @@ pub use motion::{
     CascadeDir, Rect, ShiftOutcome, cascade, grow_rect, measure_scope, shift_half_plane,
     snap_shift_line, upstream_closure,
 };
+pub use readout::{ReadoutFilter, layout_readout, parse_readout_args};
 pub use report::{
     Causes, Finding, FindingKind, LayoutMove, LayoutReport, LayoutWarning, MoveCause, PlacedBox,
     scope_findings,

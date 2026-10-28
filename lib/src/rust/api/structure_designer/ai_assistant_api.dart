@@ -69,6 +69,26 @@ String aiEditNetwork(
     RustLib.instance.api.crateApiStructureDesignerAiAssistantApiAiEditNetwork(
         code: code, replace: replace, dryRun: dryRun);
 
+/// The layout read-out of the active network: `atomcad-cli query --layout`
+/// (`doc/design_deliberate_node_placement.md` A1).
+///
+/// # Arguments
+/// * `scope` - `/`-separated HOF names from the network's root (`holes`,
+///   `m1/m2`); empty for the root. Body nodes are listed in body coordinates.
+/// * `nodes` - `,`-separated node names to list; empty for no name filter
+/// * `bbox` - `x0,y0,x1,y1`, every node whose box intersects it; empty for no
+///   box filter. Exclusive with `nodes`.
+///
+/// # Returns
+/// A header line (`# Main: extent (x0,y0)–(x1,y1), N nodes; …`), one line per
+/// selected node (`name  x,y  w×h  [tags]`, tags `ai` / `comment` / `body`),
+/// and the inferred columns and rows that hold a selected node. A problem is
+/// a `# Error: …` line.
+String aiQueryLayout(
+        {required String scope, required String nodes, required String bbox}) =>
+    RustLib.instance.api.crateApiStructureDesignerAiAssistantApiAiQueryLayout(
+        scope: scope, nodes: nodes, bbox: bbox);
+
 /// List all available node network names.
 ///
 /// This function returns a list of all node networks available in the current design.

@@ -1485,6 +1485,7 @@ impl StructureDesigner {
                         moves: sm.moves,
                         description: "Reflow neighbours".to_string(),
                         hand_moved_before: Vec::new(),
+                        ai_placed_before: Vec::new(),
                     },
                 ));
             }
@@ -2089,6 +2090,7 @@ impl StructureDesigner {
                     moves: sm.moves,
                     description: "Reflow neighbours".to_string(),
                     hand_moved_before: Vec::new(),
+                    ai_placed_before: Vec::new(),
                 },
             ));
         }
@@ -7228,10 +7230,23 @@ impl StructureDesigner {
                         .map(|node| (node_id, node.hand_moved))
                 })
                 .collect();
+            // A drag also takes the node from the AI: a human positioned it
+            // (`doc/design_deliberate_node_placement.md` D12).
+            let ai_placed_before: Vec<u64> = moves
+                .iter()
+                .filter(|&&(node_id, _, _)| {
+                    network
+                        .nodes
+                        .get(&node_id)
+                        .is_some_and(|node| node.ai_placed)
+                })
+                .map(|&(node_id, _, _)| node_id)
+                .collect();
             if let Some(network) = self.get_scope_network_mut(&pending.scope_path) {
                 for &(node_id, _) in &hand_moved_before {
                     if let Some(node) = network.nodes.get_mut(&node_id) {
                         node.hand_moved = true;
+                        node.ai_placed = false;
                     }
                 }
             }
@@ -7242,6 +7257,7 @@ impl StructureDesigner {
                 moves,
                 description,
                 hand_moved_before,
+                ai_placed_before,
             });
         }
     }
@@ -7257,8 +7273,8 @@ impl StructureDesigner {
     /// way (D11): the user watches the result and can judge an overlap.
     ///
     /// An Arrange is a deliberate human placement like a drag, so it sets
-    /// `hand_moved` on every node it moves, inside the same `MoveNodesCommand`
-    /// so one Ctrl+Z takes back both.
+    /// `hand_moved` and clears `ai_placed` on every node it moves, inside the
+    /// same `MoveNodesCommand` so one Ctrl+Z takes back all three.
     ///
     /// Returns whether anything moved, i.e. whether an undo step was pushed.
     pub fn arrange_selected_nodes(
@@ -7313,6 +7329,11 @@ impl StructureDesigner {
             .iter()
             .map(|&(id, _, _)| (id, network.nodes[&id].hand_moved))
             .collect();
+        let ai_placed_before: Vec<u64> = moves
+            .iter()
+            .map(|&(id, _, _)| id)
+            .filter(|id| network.nodes[id].ai_placed)
+            .collect();
 
         let Some(network) = self.get_scope_network_mut(scope_path) else {
             return false;
@@ -7321,6 +7342,7 @@ impl StructureDesigner {
             if let Some(node) = network.nodes.get_mut(&id) {
                 node.position = to;
                 node.hand_moved = true;
+                node.ai_placed = false;
             }
         }
 
@@ -7342,6 +7364,7 @@ impl StructureDesigner {
             moves,
             description: description.to_string(),
             hand_moved_before,
+            ai_placed_before,
         });
         self.set_dirty(true);
         true
@@ -7414,6 +7437,7 @@ impl StructureDesigner {
                     moves: scope.moves,
                     description: DESCRIPTION.to_string(),
                     hand_moved_before: Vec::new(),
+                    ai_placed_before: Vec::new(),
                 }) as Box<dyn UndoCommand>
             })
             .collect();
@@ -7848,6 +7872,7 @@ impl StructureDesigner {
                             moves: sm.moves,
                             description: "Reflow neighbours".to_string(),
                             hand_moved_before: Vec::new(),
+                            ai_placed_before: Vec::new(),
                         },
                     ));
                 }
@@ -8069,6 +8094,7 @@ impl StructureDesigner {
                         moves: sm.moves,
                         description: "Reflow neighbours".to_string(),
                         hand_moved_before: Vec::new(),
+                        ai_placed_before: Vec::new(),
                     },
                 ));
             }
@@ -11079,7 +11105,7 @@ impl StructureDesigner {
         } = plan;
 
         // Read `C`'s geometry/name and its declared node type before mutating.
-        let (custom_name, position, body_width, body_height, collapse_mode, hand_moved) = {
+        let (custom_name, position, body_width, body_height, collapse_mode, hand_moved, ai_placed) = {
             let target = self.get_scope_network(&scope_path).unwrap();
             let c = target.nodes.get(&node_id).unwrap();
             (
@@ -11089,6 +11115,7 @@ impl StructureDesigner {
                 c.body_height,
                 c.collapse_mode,
                 c.hand_moved,
+                c.ai_placed,
             )
         };
         let i_node_type = new_network.node_type.clone();
@@ -11132,6 +11159,8 @@ impl StructureDesigner {
                 // role overrides on `C` are meaningless here — start clean.
                 function_pin_roles: std::collections::BTreeMap::new(),
                 hand_moved,
+                // The same node in another form, standing where it stood.
+                ai_placed,
             };
 
             let target = self

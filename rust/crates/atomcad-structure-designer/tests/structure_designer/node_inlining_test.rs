@@ -593,6 +593,7 @@ fn splice_new_id_collision_with_old_param_id() {
             collapse_mode: atomcad_structure_designer::node_network::CollapseMode::Auto,
             function_pin_roles: std::collections::BTreeMap::new(),
             hand_moved: false,
+            ai_placed: false,
         },
     );
     let inst = 100u64;
@@ -615,6 +616,7 @@ fn splice_new_id_collision_with_old_param_id() {
             collapse_mode: atomcad_structure_designer::node_network::CollapseMode::Auto,
             function_pin_roles: std::collections::BTreeMap::new(),
             hand_moved: false,
+            ai_placed: false,
         },
     );
     target.next_node_id = 1; // force the collision

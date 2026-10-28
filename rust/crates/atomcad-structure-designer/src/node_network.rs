@@ -939,6 +939,17 @@ pub struct Node {
     /// through copy / paste / duplicate / factoring / inlining, persisted in
     /// `.cnnd` with `#[serde(default)]`, and never cleared automatically.
     pub hand_moved: bool,
+    /// An AI edit created this node and no human has positioned it since
+    /// (`doc/design_deliberate_node_placement.md` D12). The read-out's `ai`
+    /// tag; every node without it is the user's.
+    ///
+    /// **Runtime-only**: never serialized, so a reload, and any path that
+    /// rebuilds a node from its serialized form (some undo restores), makes the
+    /// node the user's. That is the safe direction. Set only by
+    /// `ai_text_edit` on the nodes an edit creates; cleared by a drag
+    /// (`end_move_nodes`) and a GUI Arrange; not carried by paste, duplicate,
+    /// factoring or inlining copies, which a human placed.
+    pub ai_placed: bool,
 }
 
 /// Default stored body width for newly created HOF nodes (logical pixels).
@@ -1571,7 +1582,7 @@ impl NodeNetwork {
                 None => self.generate_unique_display_name(&node_type_name),
             };
 
-            let new_node = Node {
+            let mut new_node = Node {
                 id: new_id,
                 node_type_name,
                 custom_name: Some(display_name),
@@ -1588,7 +1599,10 @@ impl NodeNetwork {
                 // Carried through copy/paste: the pasted node keeps whatever
                 // deliberate-placement status the original had (D5).
                 hand_moved: source_node.hand_moved,
+                // A human placed the copy (D12), so it is the user's.
+                ai_placed: false,
             };
+            disown_body(&mut new_node);
 
             self.nodes.insert(new_id, new_node);
             // A cloned `parameter` would otherwise carry the source's param_id
@@ -1803,6 +1817,7 @@ impl NodeNetwork {
             collapse_mode: CollapseMode::Auto,
             function_pin_roles: BTreeMap::new(),
             hand_moved: false,
+            ai_placed: false,
         };
 
         self.next_node_id += 1;
@@ -1842,6 +1857,7 @@ impl NodeNetwork {
             collapse_mode: CollapseMode::Auto,
             function_pin_roles: BTreeMap::new(),
             hand_moved: false,
+            ai_placed: false,
         };
 
         // Ensure next_node_id stays ahead of any manually assigned ID
@@ -2767,7 +2783,7 @@ impl NodeNetwork {
         };
 
         // Create the duplicated node
-        let duplicated_node = Node {
+        let mut duplicated_node = Node {
             id: new_node_id,
             node_type_name,
             custom_name: Some(display_name),
@@ -2782,9 +2798,12 @@ impl NodeNetwork {
             collapse_mode: original_node.collapse_mode,
             function_pin_roles: original_node.function_pin_roles.clone(),
             hand_moved: original_node.hand_moved,
+            // A human placed the duplicate (D12), so it is the user's.
+            ai_placed: false,
         };
 
         // Insert the duplicated node into the network
+        disown_body(&mut duplicated_node);
         self.nodes.insert(new_node_id, duplicated_node);
         // A duplicated `parameter` needs its own param_id and a non-colliding
         // param_name (issue #96). Harmless for every other type.
@@ -2819,6 +2838,20 @@ fn unique_param_name(base: &str, taken: &HashSet<String>) -> String {
 /// zone descent at every call site. The recurring class of bug this avoids:
 /// iterating `network.nodes.values()` and silently skipping nodes inside an
 /// HOF's owned body. See `doc/design_zones.md`.
+/// Clear [`Node::ai_placed`] throughout a copied node's body
+/// (`doc/design_deliberate_node_placement.md` D12): a copy's body nodes are
+/// copies too. The body is only forked (`zone_mut`) when it holds a flagged
+/// node, so an ordinary paste keeps sharing its storage.
+fn disown_body(node: &mut Node) {
+    let mut flagged = false;
+    if let Some(body) = node.zone.as_deref() {
+        walk_all_nodes(body, &mut |n| flagged |= n.ai_placed);
+    }
+    if flagged && let Some(body) = node.zone_mut() {
+        walk_all_nodes_mut(body, &mut |n| n.ai_placed = false);
+    }
+}
+
 pub fn walk_all_nodes(network: &NodeNetwork, f: &mut impl FnMut(&Node)) {
     for node in network.nodes.values() {
         f(node);

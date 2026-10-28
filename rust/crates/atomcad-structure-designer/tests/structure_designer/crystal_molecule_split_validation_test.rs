@@ -51,6 +51,7 @@ fn make_node(id: u64, node_type_name: &str, arg_count: usize) -> Node {
         collapse_mode: atomcad_structure_designer::node_network::CollapseMode::Auto,
         function_pin_roles: std::collections::BTreeMap::new(),
         hand_moved: false,
+        ai_placed: false,
     }
 }
 

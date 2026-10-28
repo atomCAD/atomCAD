@@ -1,0 +1,15 @@
+---
+source: crates/atomcad-structure-designer/tests/structure_designer/layout_readout_test.rs
+assertion_line: 377
+expression: out
+---
+# main: extent (100,100)–(878,318), 2 nodes
+r   100,100  160×124  ai
+m1  310,100  568×218  ai body
+# groups (inferred)
+row  r, m1  gap 50
+# main/m1: extent (50,0)–(420,83), 2 nodes
+d  50,0   160×83  ai
+e  260,0  160×83  ai
+# groups (inferred)
+row  d, e  gap 50

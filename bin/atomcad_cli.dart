@@ -96,7 +96,18 @@ Future<void> main(List<String> args) async {
         help: 'Refuse unless this document (a path, or the id '
             '`documents` lists) is the active tab');
 
-  final queryParser = ArgParser();
+  final queryParser = ArgParser()
+    ..addFlag('layout',
+        defaultsTo: false,
+        help: 'Print node boxes and inferred groups instead of the network '
+            'text')
+    ..addOption('nodes',
+        help: 'With --layout: list only these nodes (comma-separated)')
+    ..addOption('box',
+        help: 'With --layout: list nodes intersecting x0,y0,x1,y1 '
+            '(write --box=x0,... when x0 is negative)')
+    ..addOption('scope',
+        help: 'With --layout: a HOF body, as a path of names (m1/m2)');
 
   final editParser = ArgParser()
     ..addOption('code', abbr: 'c', help: 'Edit commands (optional)')
@@ -274,7 +285,23 @@ Future<void> main(List<String> args) async {
   final command = results.command!;
   switch (command.name) {
     case 'query':
-      await _runQuery(serverUrl);
+      final nodes = command['nodes'] as String?;
+      final box = command['box'] as String?;
+      final scope = command['scope'] as String?;
+      // A filter only means something to the layout read-out, so it implies
+      // --layout rather than being silently ignored.
+      if ((command['layout'] as bool) ||
+          nodes != null ||
+          box != null ||
+          scope != null) {
+        if (nodes != null && box != null) {
+          stderr.writeln('Error: --nodes and --box are mutually exclusive');
+          exit(1);
+        }
+        await _runQueryLayout(serverUrl, nodes: nodes, box: box, scope: scope);
+      } else {
+        await _runQuery(serverUrl);
+      }
       break;
     case 'edit':
       final code = command['code'] as String?;
@@ -381,6 +408,9 @@ void _printUsage() {
   stdout.writeln('  atomcad-cli                           Enter REPL mode');
   stdout.writeln(
       '  atomcad-cli query                     Query the active node network');
+  stdout.writeln(
+      '  atomcad-cli query --layout            Node boxes and inferred groups');
+  stdout.writeln('    [--nodes=a,b | --box=x0,y0,x1,y1] [--scope=m1/m2]');
   stdout
       .writeln('  atomcad-cli edit --code="..."         Edit the node network');
   stdout.writeln(
@@ -498,6 +528,9 @@ void _printReplHelp() {
   stdout.writeln('atomCAD REPL Commands:');
   stdout.writeln('');
   stdout.writeln('  query, q            Show current node network');
+  stdout.writeln('  query --layout [--nodes=a,b | --box=x0,y0,x1,y1] '
+      '[--scope=m1/m2]');
+  stdout.writeln('                      Node boxes and inferred groups');
   stdout.writeln('  edit                Enter edit mode (incremental)');
   stdout.writeln(
       '  edit --replace      Enter edit mode (replace entire network)');
@@ -668,6 +701,58 @@ String _resolveScreenshotOutput(String output) {
     return _generateAutoScreenshotPath();
   }
   return _resolveToAbsolutePath(output);
+}
+
+/// The layout options of a REPL `query` line (`--layout`, `--nodes`, `--box`,
+/// `--scope`, each value as `--opt=v` or `--opt v`), or null when the line
+/// asks for the plain network text. Any of the three filters implies
+/// `--layout`.
+Map<String, String?>? _replLayoutArgs(List<String> args) {
+  final out = <String, String?>{};
+  var layout = false;
+  for (var i = 0; i < args.length; i++) {
+    final arg = args[i];
+    if (arg == '--layout') {
+      layout = true;
+      continue;
+    }
+    for (final name in const ['nodes', 'box', 'scope']) {
+      if (arg.startsWith('--$name=')) {
+        out[name] = arg.substring(name.length + 3);
+      } else if (arg == '--$name' && i + 1 < args.length) {
+        out[name] = args[++i];
+      }
+    }
+  }
+  return (layout || out.isNotEmpty) ? out : null;
+}
+
+/// `query --layout`: the active network's node boxes and inferred groups
+/// (`doc/design_deliberate_node_placement.md` A1).
+Future<void> _runQueryLayout(String serverUrl,
+    {String? nodes, String? box, String? scope}) async {
+  try {
+    final params = <String, String>{
+      if (nodes != null) 'nodes': nodes,
+      if (box != null) 'box': box,
+      if (scope != null) 'scope': scope,
+    };
+    final uri = Uri.parse('$serverUrl/layout')
+        .replace(queryParameters: params.isEmpty ? null : params);
+    final response = await _get(uri).timeout(const Duration(seconds: 10));
+
+    if (response.statusCode == 200) {
+      stdout.write(response.body);
+      if (response.body.isNotEmpty && !response.body.endsWith('\n')) {
+        stdout.writeln();
+      }
+    } else {
+      stderr.writeln('Error: Server returned ${response.statusCode}');
+      stderr.writeln(response.body);
+    }
+  } catch (e) {
+    stderr.writeln('Error: Failed to connect to atomCAD: $e');
+  }
 }
 
 Future<void> _runQuery(String serverUrl) async {
@@ -1407,7 +1492,17 @@ Future<void> _runRepl(String serverUrl) async {
     switch (cmd) {
       case 'query':
       case 'q':
-        await _runQuery(serverUrl);
+        final layout = _replLayoutArgs(parts.sublist(1));
+        if (layout == null) {
+          await _runQuery(serverUrl);
+        } else if (layout['nodes'] != null && layout['box'] != null) {
+          stderr.writeln('Error: --nodes and --box are mutually exclusive');
+        } else {
+          await _runQueryLayout(serverUrl,
+              nodes: layout['nodes'],
+              box: layout['box'],
+              scope: layout['scope']);
+        }
         break;
 
       case 'edit':

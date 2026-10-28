@@ -104,6 +104,10 @@ pub struct NodeLayoutState {
     pub collapse_mode: CollapseMode,
     /// Whether a human had dragged this node (D5).
     pub hand_moved: bool,
+    /// Whether an AI edit created this node and no human has positioned it
+    /// since (`doc/design_deliberate_node_placement.md` D12). Carried so a
+    /// `--replace` that recreates a node keeps its owner.
+    pub ai_placed: bool,
 }
 
 /// `(name path) -> layout state` over a whole network, bodies included. The one
@@ -204,6 +208,7 @@ pub fn snapshot_node_positions(
                     body_height: node.body_height,
                     collapse_mode: node.collapse_mode,
                     hand_moved: node.hand_moved,
+                    ai_placed: node.ai_placed,
                 },
             );
             if let Some(body) = node.zone.as_deref() {
@@ -908,11 +913,12 @@ impl<'a> NetworkEditor<'a> {
         self.refresh_node_layout(scope, node_id, true);
 
         // Re-apply the rest of the identity snapshot (D14). Position was
-        // applied at creation; body size, collapse mode and `hand_moved` are
+        // applied at creation; body size, collapse mode, `hand_moved` and
+        // `ai_placed` are
         // applied *after* `populate_custom_node_type_cache`, whose
         // `ensure_zone_init` is what installs a zone-bearing node's body and
         // its default dimensions. Applied unconditionally: on a node with no
-        // zone these three fields are inert, so there is nothing to gate on.
+        // zone the body fields are inert, so there is nothing to gate on.
         if let Some(state) = previous
             && let Some(node) = scope_net_mut(self.network, scope)
                 .and_then(|network| network.nodes.get_mut(&node_id))
@@ -921,6 +927,7 @@ impl<'a> NetworkEditor<'a> {
             node.body_height = state.body_height;
             node.collapse_mode = state.collapse_mode;
             node.hand_moved = state.hand_moved;
+            node.ai_placed = state.ai_placed;
         }
 
         self.result.nodes_created.push(path.to_string());

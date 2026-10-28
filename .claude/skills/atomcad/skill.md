@@ -353,6 +353,48 @@ layout), prints exactly the JSON the real edit would print plus
 `"dry_run": true`, and then reverts it: no undo step, no dirty flag, no AI
 History entry, no redraw. Combines with `--replace` and with stdin input.
 
+#### `query --layout`: where things are on the canvas
+
+The text has no positions; `atomcad-cli query --layout` prints the drawing as
+boxes:
+
+```
+# Main: extent (100,20)–(1150,490), 11 nodes; 7 in box (0,0)–(700,600)
+w        100,100  160×60
+h        100,190  160×60
+d        100,280  160×60
+note     100,370  180×80   comment
+dims     310,160  160×110
+hole_r   310,390  160×60   ai
+hole     520,390  160×80   ai
+# groups (inferred)
+column   w, h, d            gap 30
+row      hole_r, hole       gap 50
+```
+
+```bash
+atomcad-cli query --layout                        # whole network
+atomcad-cli query --layout --nodes=d,note,hole_r  # only these (by name)
+atomcad-cli query --layout --box=0,0,700,600      # nodes touching this area; empty = free
+atomcad-cli query --layout --scope=m1             # a HOF body (path: m1/m2)
+```
+
+- Each line: `name  x,y  w×h  [tags]`. Canvas pixels, x right, **y down**,
+  rounded; `x,y` is the top-left corner; sorted by top, then left. In a body,
+  coordinates are relative to the body's top-left.
+- Header: the **extent** of the whole scope regardless of filter (everything
+  outside it is free), the node count, and the filter's match count.
+- Tags: `ai` = an AI edit created it and no human has positioned it since;
+  **every untagged node is the user's**. `comment` = a comment box. `body` =
+  an expanded HOF; list inside with `--scope`. The `ai` tag is not saved, so
+  after a reload every node is the user's.
+- `# groups (inferred)`: maximal columns (lefts within 8 px, gaps ≤ 60) and
+  rows (tops within 8 px, gaps ≤ 100), with the median gap. A guess,
+  recomputed on every query. Listed when any member is selected; unlisted
+  members print as `…`.
+- `--nodes` and `--box` are exclusive. An unknown name prints
+  `(no such node)`. Use `--box=…` (with `=`) when a coordinate is negative.
+
 #### Every edit is one undo step
 
 Each `edit` call is recorded in the app's undo stack as a single step labelled
@@ -419,6 +461,9 @@ atomcad-cli edit --replace
 
 # Preview: same JSON (plus "dry_run": true), then everything is reverted
 atomcad-cli edit --dry-run --code="..."
+
+# Node boxes on the canvas, and inferred columns/rows (see "query --layout")
+atomcad-cli query --layout [--nodes=a,b | --box=x0,y0,x1,y1] [--scope=m1/m2]
 ```
 
 **Query output format:**

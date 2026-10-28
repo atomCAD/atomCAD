@@ -136,6 +136,54 @@ modified, nothing appears in the AI History panel, and the canvas is not
 redrawn. Use it to see what an edit in a crowded area would move before
 committing to it. It works with `--replace` and with multi-line input too.
 
+### Where things are on the canvas: `query --layout`
+
+The text format carries no positions. `query --layout` prints the drawing
+instead: one line per node with its box, plus the columns and rows the drawing
+appears to be arranged in.
+
+```bash
+atomcad-cli query --layout                       # every node
+atomcad-cli query --layout --nodes=d,note,hole_r # just these
+atomcad-cli query --layout --box=0,0,700,600     # everything touching this area
+atomcad-cli query --layout --scope=holes         # inside the body of `holes`
+```
+
+```
+# Main: extent (100,20)–(1150,490), 11 nodes; 7 in box (0,0)–(700,600)
+w        100,100  160×60
+h        100,190  160×60
+d        100,280  160×60
+note     100,370  180×80   comment
+dims     310,160  160×110
+hole_r   310,390  160×60   ai
+hole     520,390  160×80   ai
+# groups (inferred)
+column   w, h, d            gap 30
+row      hole_r, hole       gap 50
+```
+
+- **Coordinates** are canvas pixels, x to the right and y **down**, rounded to
+  whole pixels. A position is the node's top-left corner; the size is what the
+  canvas draws. Inside a body (`--scope`, a `/`-separated path of node names
+  such as `m1/m2`) they are relative to the body's top-left corner.
+- **The header** gives the extent of the whole network (or body), whatever the
+  filter: everything outside it is free space. An empty `--box` result means
+  that area is free.
+- **Tags:** `ai` marks a node an AI edit created that nobody has moved by hand
+  since (a drag or an *Arrange* command takes it back; so does reopening the
+  file, since the tag is never saved). `comment` is a comment box, `body` an
+  expanded higher-order node whose contents `--scope` lists.
+- **Groups** are a guess, labelled as such: nodes whose left edges line up
+  within 8 px and that sit at most 60 px apart form a column; tops within 8 px
+  and at most 100 px apart form a row. `gap` is the typical spacing. A group
+  is shown when any of its members is listed; members that are not are `…`.
+- `--nodes` and `--box` cannot be combined. A name that does not exist is
+  listed as `(no such node)`. Write `--box=…` with an `=` when the first
+  coordinate is negative.
+
+In the REPL, `query --layout` takes the same options.
+
 ### Undoing an edit
 
 Each `atomcad-cli edit` is recorded as a **single undo step** in the running

@@ -55,9 +55,7 @@ pub fn ai_query_network() -> String {
     unsafe {
         with_cad_instance_or(
             |cad_instance| cad_instance.structure_designer.query_active_network_text(),
-            "# Error: Could not access structure designer
-"
-            .to_string(),
+            "# Error: Could not access structure designer\n".to_string(),
         )
     }
 }
@@ -123,6 +121,35 @@ pub fn ai_edit_network(code: String, replace: bool, dry_run: bool) -> String {
                 outcome.to_json()
             },
             r#"{"success":false,"errors":["Could not access structure designer"]}"#.to_string(),
+        )
+    }
+}
+
+/// The layout read-out of the active network: `atomcad-cli query --layout`
+/// (`doc/design_deliberate_node_placement.md` A1).
+///
+/// # Arguments
+/// * `scope` - `/`-separated HOF names from the network's root (`holes`,
+///   `m1/m2`); empty for the root. Body nodes are listed in body coordinates.
+/// * `nodes` - `,`-separated node names to list; empty for no name filter
+/// * `bbox` - `x0,y0,x1,y1`, every node whose box intersects it; empty for no
+///   box filter. Exclusive with `nodes`.
+///
+/// # Returns
+/// A header line (`# Main: extent (x0,y0)–(x1,y1), N nodes; …`), one line per
+/// selected node (`name  x,y  w×h  [tags]`, tags `ai` / `comment` / `body`),
+/// and the inferred columns and rows that hold a selected node. A problem is
+/// a `# Error: …` line.
+#[flutter_rust_bridge::frb(sync)]
+pub fn ai_query_layout(scope: String, nodes: String, bbox: String) -> String {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                cad_instance
+                    .structure_designer
+                    .query_active_layout(&scope, &nodes, &bbox)
+            },
+            "# Error: Could not access structure designer\n".to_string(),
         )
     }
 }

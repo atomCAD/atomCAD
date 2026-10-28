@@ -28,6 +28,12 @@ pub struct MoveNodesCommand {
     /// `hand_moved`"), so one Ctrl+Z takes back both the position and the
     /// "a human placed this" claim.
     pub hand_moved_before: Vec<(u64, bool)>,
+    /// The nodes whose [`ai_placed`](crate::node_network::Node::ai_placed)
+    /// flag this command clears: the AI's nodes a human just positioned
+    /// (`doc/design_deliberate_node_placement.md` D12). Populated by the same
+    /// two paths as `hand_moved_before`, and empty everywhere else. Undo gives
+    /// the nodes back to the AI with their positions.
+    pub ai_placed_before: Vec<u64>,
 }
 
 impl UndoCommand for MoveNodesCommand {
@@ -47,6 +53,11 @@ impl UndoCommand for MoveNodesCommand {
                     node.hand_moved = was_hand_moved;
                 }
             }
+            for node_id in &self.ai_placed_before {
+                if let Some(node) = network.nodes.get_mut(node_id) {
+                    node.ai_placed = true;
+                }
+            }
         }
     }
 
@@ -60,6 +71,11 @@ impl UndoCommand for MoveNodesCommand {
             for &(node_id, _was_hand_moved) in &self.hand_moved_before {
                 if let Some(node) = network.nodes.get_mut(&node_id) {
                     node.hand_moved = true;
+                }
+            }
+            for node_id in &self.ai_placed_before {
+                if let Some(node) = network.nodes.get_mut(node_id) {
+                    node.ai_placed = false;
                 }
             }
         }

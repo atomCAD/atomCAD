@@ -37,6 +37,8 @@ import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_p
 ///
 /// - `GET /health` - Health check, returns `{"status": "ok"}`
 /// - `GET /query` - Returns the active node network in text format
+/// - `GET /layout?nodes=a,b|box=x0,y0,x1,y1&scope=m1/m2` - The layout
+///   read-out: node boxes and inferred groups (`query --layout`)
 /// - `POST /edit?replace=true|false&dry_run=true|false` - Applies text format
 ///   edits to the network. With `dry_run=true` the edit runs in full, its
 ///   result (with `"dry_run": true`) is returned, and it is reverted: no undo
@@ -307,6 +309,9 @@ class AiAssistantServer {
           case '/query':
             _handleQuery(request);
             break;
+          case '/layout':
+            _handleLayout(request);
+            break;
           case '/edit':
             _handleEdit(request, body);
             break;
@@ -508,6 +513,23 @@ class AiAssistantServer {
     // Call Rust API to get network text representation
     final result = ai_api.aiQueryNetwork();
 
+    request.response.headers.contentType = ContentType.text;
+    request.response.write(result);
+  }
+
+  /// The layout read-out (`doc/design_deliberate_node_placement.md` A1).
+  /// Plain text like `/query`; a bad argument comes back as a `# Error:` line.
+  void _handleLayout(HttpRequest request) {
+    if (request.method != 'GET') {
+      request.response.statusCode = HttpStatus.methodNotAllowed;
+      return;
+    }
+    final params = request.uri.queryParameters;
+    final result = ai_api.aiQueryLayout(
+      scope: params['scope'] ?? '',
+      nodes: params['nodes'] ?? '',
+      bbox: params['box'] ?? '',
+    );
     request.response.headers.contentType = ContentType.text;
     request.response.write(result);
   }
