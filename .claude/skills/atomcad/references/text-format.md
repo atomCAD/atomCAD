@@ -383,6 +383,18 @@ atomcad-cli edit --code="sphere1 = sphere { radius: 10 }"
 atomcad-cli edit --replace --code="sphere1 = sphere { radius: 10 }"
 ```
 
+### Dry run
+- Either mode, with `--dry-run`: the edit runs in full and its result is
+  printed with `"dry_run": true`, then everything is reverted
+
+```bash
+atomcad-cli edit --dry-run --code="sphere1 = sphere { radius: 10 }"
+```
+
+The text format itself has no positions. Where an edit put new nodes, and which
+existing ones it moved and why, comes back in the result's `layout` section
+(see the skill's "The `layout` section").
+
 ## Node ID Reuse
 
 When editing (not replacing), if a node ID already exists:

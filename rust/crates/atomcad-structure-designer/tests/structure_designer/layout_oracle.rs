@@ -15,7 +15,7 @@
 //!
 //! | # | Invariant | Status |
 //! |---|---|---|
-//! | 1 | No new overlap | live |
+//! | 1 | No new overlap, or with a report: exactly the reported ones | live, via [`check_overlap_findings`] |
 //! | 2 | No wire flipped | live |
 //! | 3 | Untouched means untouched | live |
 //! | 4 | Rigid shifts | live, via [`check_rigid_shift`] |
@@ -226,6 +226,35 @@ pub fn check(before: &Drawing, after: &Drawing, touched: &Touched) {
 /// **1 — No new overlap.** The set of overlapping node pairs after the edit is
 /// a subset of the set before it, per scope.
 pub fn check_no_new_overlap(before: &Drawing, after: &Drawing) {
+    check_overlap_findings(before, after, &[]);
+}
+
+/// **1, against a report** (`doc/design_deliberate_node_placement.md`
+/// Phase 3): the new overlaps are **exactly** the reported `overlap` findings,
+/// in both directions. Every newly overlapping pair must be in `findings`, and
+/// every finding must be a pair that overlaps after the edit and did not
+/// before.
+///
+/// `findings` are the reported pairs as full name paths, in either order. The
+/// overlaps are measured here, from the two drawings, and never through the
+/// production findings code: the oracle stays an independent judge. With an
+/// empty `findings` this is invariant 1 as it always was.
+pub fn check_overlap_findings(
+    before: &Drawing,
+    after: &Drawing,
+    findings: &[(NamePath, NamePath)],
+) {
+    let reported: HashSet<(NamePath, NamePath)> = findings
+        .iter()
+        .map(|(a, b)| {
+            if a <= b {
+                (a.clone(), b.clone())
+            } else {
+                (b.clone(), a.clone())
+            }
+        })
+        .collect();
+    let mut found: HashSet<(NamePath, NamePath)> = HashSet::new();
     for (scope, nodes) in &after.scopes {
         let empty = HashMap::new();
         let was = before.scopes.get(scope).unwrap_or(&empty);
@@ -243,13 +272,32 @@ pub fn check_no_new_overlap(before: &Drawing, after: &Drawing) {
                     // pre-existing overlap to inherit.
                     _ => false,
                 };
+                if existed {
+                    continue;
+                }
+                let (mut pa, mut pb) = (scope.clone(), scope.clone());
+                pa.push((*a).clone());
+                pb.push((*b).clone());
                 assert!(
-                    existed,
-                    "new overlap in scope {:?}: {} {:?} and {} {:?}",
-                    scope, a, ra, b, rb
+                    reported.contains(&(pa.clone(), pb.clone())),
+                    "new overlap in scope {:?}, not reported: {} {:?} and {} {:?}",
+                    scope,
+                    a,
+                    ra,
+                    b,
+                    rb
                 );
+                found.insert((pa, pb));
             }
         }
+    }
+    for (a, b) in &reported {
+        assert!(
+            found.contains(&(a.clone(), b.clone())),
+            "reported overlap {} / {} is not a new overlap",
+            a.join("/"),
+            b.join("/")
+        );
     }
 }
 

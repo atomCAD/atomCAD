@@ -911,8 +911,13 @@ nodes created, updated and deleted by path, the connections made, and any
 **Layout** — the part no diff can show, because the text format carries no node
 positions. Which layout pass ran, how many nodes of the network moved, the
 largest displacement, and the moved nodes themselves grouped by scope, each with
-its before and after position. This is how you answer "did that edit disturb my
-drawing?" without comparing the canvas against your memory of it.
+its before and after position and **why** it moved: `grow` (a node the edit
+enlarged pushed it) or `auto` (room was made for a new node, or a new wire was
+kept running left to right). Hover the cause to see the specific reason, such as
+which new node it made room for. This is how you answer "did that edit disturb
+my drawing?" without comparing the canvas against your memory of it. The same
+causes are what the AI itself is told in the edit's
+[`layout` report](headless_cli.md#the-layout-section-what-moved-on-the-canvas-and-why).
 
 The pass named there is *Incremental*, and that is the point: an AI edit fits
 its own new nodes into your drawing and repairs what they broke, rather than

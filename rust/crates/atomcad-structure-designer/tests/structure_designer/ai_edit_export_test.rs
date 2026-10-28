@@ -14,6 +14,7 @@ use atomcad_structure_designer::ai_edit_export::{
 use atomcad_structure_designer::ai_edit_log::{
     AiActivityRecord, AiEditLog, AiEditRecord, LayoutOutcome, LayoutPath, MovedNode,
 };
+use atomcad_structure_designer::layout::MoveCause;
 use glam::DVec2;
 
 // ============================================================================
@@ -143,6 +144,8 @@ fn json_carries_the_layout_outcome_with_path_keyed_moves() {
             path: vec!["m1".to_string(), "d".to_string()],
             before: DVec2::new(10.0, 20.0),
             after: DVec2::new(10.0, 50.0),
+            cause: Some(MoveCause::Grow),
+            why: "made room for m1 as it grew".to_string(),
         }],
         max_displacement: 30.0,
         delta: None,
@@ -157,6 +160,8 @@ fn json_carries_the_layout_outcome_with_path_keyed_moves() {
     assert_eq!(layout["moved"][0]["before"][1], 20.0);
     assert_eq!(layout["moved"][0]["after"][1], 50.0);
     assert_eq!(layout["moved"][0]["displacement"], 30.0);
+    assert_eq!(layout["moved"][0]["cause"], "grow");
+    assert_eq!(layout["moved"][0]["why"], "made room for m1 as it grew");
 }
 
 /// `LayoutPath` is exported snake-cased, not `Debug`-formatted: a reader

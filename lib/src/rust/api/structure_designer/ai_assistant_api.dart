@@ -38,6 +38,8 @@ String aiQueryNetwork() => RustLib.instance.api
 /// # Arguments
 /// * `code` - The edit commands in text format
 /// * `replace` - If true, replace entire network; if false, incremental merge
+/// * `dry_run` - If true, run the whole edit and report it, then revert it:
+///   no undo step, no dirty flag, no AI-log entry, no refresh
 ///
 /// # Returns
 /// A JSON string containing the `EditResult` with details of what was changed:
@@ -48,6 +50,10 @@ String aiQueryNetwork() => RustLib.instance.api
 /// - `connections_made` - Descriptions of wire connections
 /// - `errors` - Error messages if any
 /// - `warnings` - Warning messages if any
+/// - `layout` - What the layout pass did, when there is something to say: new
+///   nodes' boxes, existing nodes that moved with a cause, findings
+///   (`doc/design_deliberate_node_placement.md` A3)
+/// - `dry_run` - `true` on a preview, absent otherwise
 ///
 /// The whole call is recorded as **one undo step** ("AI edit network"), so a
 /// bad edit — including one that emptied a zone body — is recoverable with
@@ -58,9 +64,10 @@ String aiQueryNetwork() => RustLib.instance.api
 /// sphere1 = sphere { center: (0, 0, 0), radius: 10, visible: true }
 /// output sphere1
 /// ```
-String aiEditNetwork({required String code, required bool replace}) =>
+String aiEditNetwork(
+        {required String code, required bool replace, required bool dryRun}) =>
     RustLib.instance.api.crateApiStructureDesignerAiAssistantApiAiEditNetwork(
-        code: code, replace: replace);
+        code: code, replace: replace, dryRun: dryRun);
 
 /// List all available node network names.
 ///

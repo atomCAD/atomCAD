@@ -39,11 +39,12 @@
 //!   `print_log` is. Undoing an AI edit leaves its entry standing (D6): this is
 //!   a log of what happened, not a view of document state.
 
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use glam::DVec2;
 
+use crate::layout::{LayoutMove, LayoutReport, MoveCause};
 use crate::node_network::NodeNetwork;
 use crate::text_format::{NamePath, PositionSnapshot};
 
@@ -138,6 +139,12 @@ pub struct MovedNode {
     pub path: NamePath,
     pub before: DVec2,
     pub after: DVec2,
+    /// Why the layout pass moved it — the first cause the pass's report
+    /// (`layout::LayoutReport`) recorded. `None` for a node the report does not
+    /// account for.
+    pub cause: Option<MoveCause>,
+    /// The report's short reason for that first move; empty with no cause.
+    pub why: String,
 }
 
 impl MovedNode {
@@ -201,6 +208,8 @@ impl LayoutOutcome {
                     path: name_path.clone(),
                     before: before_pos,
                     after: after_pos,
+                    cause: None,
+                    why: String::new(),
                 })
             })
             .collect();
@@ -217,6 +226,20 @@ impl LayoutOutcome {
             moved,
             max_displacement,
             delta: None,
+        }
+    }
+
+    /// Take each moved node's cause from the layout pass's report, matched by
+    /// name path. The diff above stays the authority on *what* moved; the
+    /// report only says why.
+    pub fn attach_causes(&mut self, report: &LayoutReport) {
+        let by_path: HashMap<&NamePath, &LayoutMove> =
+            report.moved.iter().map(|m| (&m.path, m)).collect();
+        for moved in &mut self.moved {
+            if let Some(entry) = by_path.get(&moved.path) {
+                moved.cause = entry.cause;
+                moved.why = entry.why.clone();
+            }
         }
     }
 }

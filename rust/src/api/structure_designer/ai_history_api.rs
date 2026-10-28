@@ -83,6 +83,11 @@ pub struct APIMovedNode {
     pub before: APIVec2,
     pub after: APIVec2,
     pub displacement: f64,
+    /// Why the layout pass moved it (`grow`, `auto`), or empty when the pass's
+    /// report does not account for the move.
+    pub cause: String,
+    /// The report's short reason for the move; empty with no cause.
+    pub why: String,
 }
 
 impl From<&MovedNode> for APIMovedNode {
@@ -99,6 +104,11 @@ impl From<&MovedNode> for APIMovedNode {
                 y: moved.after.y,
             },
             displacement: moved.displacement(),
+            cause: moved
+                .cause
+                .map(|cause| cause.as_str().to_string())
+                .unwrap_or_default(),
+            why: moved.why.clone(),
         }
     }
 }

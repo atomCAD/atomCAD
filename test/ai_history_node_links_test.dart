@@ -31,6 +31,8 @@ APIMovedNode _moved(String path) => APIMovedNode(
       before: const APIVec2(x: 0, y: 0),
       after: const APIVec2(x: 40, y: 0),
       displacement: 40,
+      cause: 'auto',
+      why: 'made room for new node n',
     );
 
 /// Pumps [child] with the Material ancestry a `Tooltip` needs.

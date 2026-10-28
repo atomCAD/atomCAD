@@ -629,12 +629,21 @@ class APIMovedNode {
   final APIVec2 after;
   final double displacement;
 
+  /// Why the layout pass moved it (`grow`, `auto`), or empty when the pass's
+  /// report does not account for the move.
+  final String cause;
+
+  /// The report's short reason for the move; empty with no cause.
+  final String why;
+
   const APIMovedNode({
     required this.path,
     required this.depth,
     required this.before,
     required this.after,
     required this.displacement,
+    required this.cause,
+    required this.why,
   });
 
   @override
@@ -643,7 +652,9 @@ class APIMovedNode {
       depth.hashCode ^
       before.hashCode ^
       after.hashCode ^
-      displacement.hashCode;
+      displacement.hashCode ^
+      cause.hashCode ^
+      why.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -654,5 +665,7 @@ class APIMovedNode {
           depth == other.depth &&
           before == other.before &&
           after == other.after &&
-          displacement == other.displacement;
+          displacement == other.displacement &&
+          cause == other.cause &&
+          why == other.why;
 }

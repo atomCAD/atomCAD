@@ -1242,6 +1242,45 @@ impl StructureDesigner {
         }
     }
 
+    /// Run an undo body in place, exactly as [`undo`](Self::undo) runs a
+    /// command's, but with no undo stack involved: nothing is popped, nothing
+    /// is annotated in the AI edit log.
+    ///
+    /// What an AI edit's `--dry-run` reverts itself with: the edit is applied,
+    /// its result captured, and then its own command's restore runs through
+    /// here (`TextEditNetworkCommand::restore_before`). Sharing the post-undo
+    /// steps (the refresh mode's derived-state rebuild, the call-site
+    /// restores) is what makes the preview's restore *the* Ctrl+Z restore
+    /// rather than a lookalike.
+    ///
+    /// One difference from an undo, deliberately: the dirty flag is put back
+    /// as it was. An undo is a change to the document; reverting something
+    /// that was never kept is not.
+    pub(crate) fn revert_in_place(
+        &mut self,
+        refresh_mode: UndoRefreshMode,
+        revert: impl FnOnce(&mut UndoContext),
+    ) {
+        let was_dirty = self.is_dirty;
+        let mut ctx = UndoContext {
+            node_type_registry: &mut self.node_type_registry,
+            active_network_name: &mut self.active_node_network_name,
+            active_record_def_name: &mut self.active_record_def_name,
+            eval_error_snapshots: &mut self.eval_error_snapshots,
+            clipboard: ClipboardSlot::own(&mut self.clipboard, self.document_id),
+            call_site_restores: Vec::new(),
+        };
+        revert(&mut ctx);
+        let clipboard_changed = ctx.clipboard.changed;
+        let call_site_restores = std::mem::take(&mut ctx.call_site_restores);
+        if clipboard_changed {
+            self.recapture_own_clipboard_owners();
+        }
+        self.apply_undo_refresh_mode(refresh_mode);
+        self.apply_call_site_restores(call_site_restores);
+        self.is_dirty = was_dirty;
+    }
+
     /// Give the instances of each restored network the wiring an undone
     /// command recorded for them (`UndoContext::restore_call_sites`), then
     /// re-validate the networks holding them. Runs after the undo's refresh.

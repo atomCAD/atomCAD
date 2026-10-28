@@ -37,7 +37,10 @@ import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_p
 ///
 /// - `GET /health` - Health check, returns `{"status": "ok"}`
 /// - `GET /query` - Returns the active node network in text format
-/// - `POST /edit?replace=true|false` - Applies text format edits to the network
+/// - `POST /edit?replace=true|false&dry_run=true|false` - Applies text format
+///   edits to the network. With `dry_run=true` the edit runs in full, its
+///   result (with `"dry_run": true`) is returned, and it is reverted: no undo
+///   step, no dirty flag, no AI-log entry.
 /// - `GET /nodes?category=<cat>&verbose=true` - List all available node types by category
 /// - `GET /describe?node=<name>` - Get detailed information about a specific node type
 /// - `GET /evaluate?node=<id>&verbose=true` - Evaluate a node and return its result
@@ -516,12 +519,17 @@ class AiAssistantServer {
     }
 
     final replace = request.uri.queryParameters['replace'] == 'true';
+    final dryRun = request.uri.queryParameters['dry_run'] == 'true';
 
     // Call Rust API to apply edits
-    final resultJson = ai_api.aiEditNetwork(code: body, replace: replace);
+    final resultJson =
+        ai_api.aiEditNetwork(code: body, replace: replace, dryRun: dryRun);
 
-    // Notify UI if callback is set
-    onNetworkEdited?.call();
+    // Notify UI if callback is set. A dry run reverted itself, so there is
+    // nothing new to show.
+    if (!dryRun) {
+      onNetworkEdited?.call();
+    }
 
     request.response.headers.contentType = ContentType.json;
     request.response.write(resultJson);

@@ -209,7 +209,7 @@ abstract class RustLibApi extends BaseApi {
       {required String nodeTypeName});
 
   String crateApiStructureDesignerAiAssistantApiAiEditNetwork(
-      {required String code, required bool replace});
+      {required String code, required bool replace, required bool dryRun});
 
   (String, BigInt, bool)?
       crateApiStructureDesignerAiAssistantApiAiGetActiveNetworkInfo();
@@ -3175,12 +3175,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   @override
   String crateApiStructureDesignerAiAssistantApiAiEditNetwork(
-      {required String code, required bool replace}) {
+      {required String code, required bool replace, required bool dryRun}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_String(code, serializer);
         sse_encode_bool(replace, serializer);
+        sse_encode_bool(dryRun, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 25)!;
       },
       codec: SseCodec(
@@ -3188,7 +3189,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeErrorData: null,
       ),
       constMeta: kCrateApiStructureDesignerAiAssistantApiAiEditNetworkConstMeta,
-      argValues: [code, replace],
+      argValues: [code, replace, dryRun],
       apiImpl: this,
     ));
   }
@@ -3197,7 +3198,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerAiAssistantApiAiEditNetworkConstMeta =>
           const TaskConstMeta(
             debugName: "ai_edit_network",
-            argNames: ["code", "replace"],
+            argNames: ["code", "replace", "dryRun"],
           );
 
   @override
@@ -22550,14 +22551,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIMovedNode dco_decode_api_moved_node(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 5)
-      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    if (arr.length != 7)
+      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
     return APIMovedNode(
       path: dco_decode_String(arr[0]),
       depth: dco_decode_u_32(arr[1]),
       before: dco_decode_api_vec_2(arr[2]),
       after: dco_decode_api_vec_2(arr[3]),
       displacement: dco_decode_f_64(arr[4]),
+      cause: dco_decode_String(arr[5]),
+      why: dco_decode_String(arr[6]),
     );
   }
 
@@ -29860,12 +29863,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_before = sse_decode_api_vec_2(deserializer);
     var var_after = sse_decode_api_vec_2(deserializer);
     var var_displacement = sse_decode_f_64(deserializer);
+    var var_cause = sse_decode_String(deserializer);
+    var var_why = sse_decode_String(deserializer);
     return APIMovedNode(
         path: var_path,
         depth: var_depth,
         before: var_before,
         after: var_after,
-        displacement: var_displacement);
+        displacement: var_displacement,
+        cause: var_cause,
+        why: var_why);
   }
 
   @protected
@@ -37788,6 +37795,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_api_vec_2(self.before, serializer);
     sse_encode_api_vec_2(self.after, serializer);
     sse_encode_f_64(self.displacement, serializer);
+    sse_encode_String(self.cause, serializer);
+    sse_encode_String(self.why, serializer);
   }
 
   @protected

@@ -101,7 +101,11 @@ Future<void> main(List<String> args) async {
   final editParser = ArgParser()
     ..addOption('code', abbr: 'c', help: 'Edit commands (optional)')
     ..addFlag('replace',
-        abbr: 'r', defaultsTo: false, help: 'Replace entire network');
+        abbr: 'r', defaultsTo: false, help: 'Replace entire network')
+    ..addFlag('dry-run',
+        defaultsTo: false,
+        help: 'Run the edit and print its result, then revert it '
+            '(no undo step, nothing saved)');
 
   final nodesParser = ArgParser()
     ..addOption('category',
@@ -275,13 +279,14 @@ Future<void> main(List<String> args) async {
     case 'edit':
       final code = command['code'] as String?;
       final replace = command['replace'] as bool;
+      final dryRun = command['dry-run'] as bool;
       if (code != null) {
         // Inline code provided - process escape sequences
         final processedCode = _processEscapeSequences(code);
-        await _runEdit(serverUrl, processedCode, replace);
+        await _runEdit(serverUrl, processedCode, replace, dryRun: dryRun);
       } else {
         // Multi-line mode: read from stdin
-        await _runMultilineEdit(serverUrl, replace);
+        await _runMultilineEdit(serverUrl, replace, dryRun: dryRun);
       }
       break;
     case 'nodes':
@@ -384,6 +389,8 @@ void _printUsage() {
       '  atomcad-cli edit                      Multi-line edit from stdin');
   stdout.writeln(
       '  atomcad-cli edit --replace            Multi-line replace from stdin');
+  stdout.writeln(
+      '  atomcad-cli edit --dry-run ...        Preview an edit, then revert it');
   stdout.writeln(
       '  atomcad-cli nodes                     List all available node types');
   stdout.writeln(
@@ -1235,11 +1242,15 @@ Future<void> _runNew(String serverUrl, ArgResults args) async {
   }
 }
 
-Future<String?> _runEdit(String serverUrl, String code, bool replace) async {
+Future<String?> _runEdit(String serverUrl, String code, bool replace,
+    {bool dryRun = false}) async {
   try {
-    final uri = replace
-        ? Uri.parse('$serverUrl/edit?replace=true')
-        : Uri.parse('$serverUrl/edit');
+    final params = <String, String>{
+      if (replace) 'replace': 'true',
+      if (dryRun) 'dry_run': 'true',
+    };
+    final uri = Uri.parse('$serverUrl/edit')
+        .replace(queryParameters: params.isEmpty ? null : params);
 
     final response =
         await _post(uri, body: code).timeout(const Duration(seconds: 30));
@@ -1294,7 +1305,8 @@ List<String>? _readUntilTerminator({required bool showPrompt}) {
   return lines;
 }
 
-Future<void> _runMultilineEdit(String serverUrl, bool replace) async {
+Future<void> _runMultilineEdit(String serverUrl, bool replace,
+    {bool dryRun = false}) async {
   final isTty = stdin.hasTerminal;
 
   if (isTty) {
@@ -1316,7 +1328,7 @@ Future<void> _runMultilineEdit(String serverUrl, bool replace) async {
   }
 
   final code = lines.join('\n');
-  await _runEdit(serverUrl, code, replace);
+  await _runEdit(serverUrl, code, replace, dryRun: dryRun);
 }
 
 /// Read every line of piped stdin, blank lines included.

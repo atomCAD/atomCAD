@@ -43,6 +43,7 @@ pub mod common;
 pub mod delta;
 pub mod incremental;
 pub mod motion;
+pub mod report;
 pub mod size;
 pub mod sugiyama;
 pub mod topological_grid;
@@ -55,12 +56,16 @@ pub use delta::{
     node_ids_by_path, scopes_inside_out,
 };
 pub use incremental::{
-    Block, BodyFrame, IncrementalOutcome, SLIDE_WINDOW, layout_incremental, layout_scope,
-    repair_grown,
+    Block, BodyFrame, IncrementalOutcome, SLIDE_WINDOW, ScopeMove, layout_incremental,
+    layout_scope, repair_grown,
 };
 pub use motion::{
     CascadeDir, Rect, ShiftOutcome, cascade, grow_rect, measure_scope, shift_half_plane,
     snap_shift_line, upstream_closure,
+};
+pub use report::{
+    Causes, Finding, FindingKind, LayoutMove, LayoutReport, LayoutWarning, MoveCause, PlacedBox,
+    scope_findings,
 };
 pub use size::{rendered_body_size, rendered_node_size, rendered_node_size_by_id};
 

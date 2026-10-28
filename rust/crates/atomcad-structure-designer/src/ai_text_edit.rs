@@ -22,6 +22,7 @@ use crate::ai_edit_log::{
     AI_EDIT_COMMAND_DESCRIPTION, AiEditRecord, DeltaCounts, LayoutOutcome, LayoutPath,
 };
 use crate::layout;
+use crate::layout::LayoutReport;
 use crate::network_validator::validate_network;
 use crate::node_type_registry::NodeTypeRegistry;
 use crate::scoped_validation_errors::{collect_scoped_validation_errors, error_node_path};
@@ -30,21 +31,57 @@ use crate::structure_designer::StructureDesigner;
 use crate::text_format::{
     EditResult, edit_network as text_edit_network, serialize_network, snapshot_node_positions,
 };
+use crate::undo::UndoRefreshMode;
 use crate::undo::commands::text_edit_network::TextEditNetworkCommand;
 
 /// What [`StructureDesigner::ai_text_edit`] hands back to its caller.
 pub struct AiTextEditOutcome {
     /// The result to report to the AI, verbatim.
     pub result: EditResult,
+    /// The layout pass's report, the result's `layout` section
+    /// (`doc/design_deliberate_node_placement.md` A3). `None` when there is
+    /// nothing to say: no existing node moved and no finding or warning arose
+    /// (and on every edit that did not apply), so an edit that leaves the
+    /// drawing alone says nothing about layout. Kept beside `result`, never in
+    /// it: `EditResult` is the editor's report, this is the layout pass's.
+    pub layout: Option<LayoutReport>,
+    /// The edit was a preview (`--dry-run`): everything above is what it would
+    /// have done, and nothing of it stayed.
+    pub dry_run: bool,
     /// The edit reached the network, so the caller owes it a scene refresh.
     /// False on the three rejection paths, which change nothing and so must not
-    /// trigger one.
+    /// trigger one, and on a dry run, which reverted itself.
     pub needs_refresh: bool,
 }
 
 impl AiTextEditOutcome {
+    /// The JSON the AI reads: the [`EditResult`] fields, with the layout
+    /// report under `layout` when there is one and `"dry_run": true` on a
+    /// preview. One object, so a dry run's JSON is the real edit's plus one
+    /// key.
+    pub fn to_json(&self) -> String {
+        let mut value = match serde_json::to_value(&self.result) {
+            Ok(value) => value,
+            Err(e) => {
+                return format!(
+                    r#"{{"success":false,"errors":["Failed to serialize result: {}"]}}"#,
+                    e
+                );
+            }
+        };
+        if let Some(object) = value.as_object_mut() {
+            if let Some(layout) = &self.layout {
+                object.insert("layout".to_string(), layout.to_json());
+            }
+            if self.dry_run {
+                object.insert("dry_run".to_string(), serde_json::Value::Bool(true));
+            }
+        }
+        value.to_string()
+    }
+
     /// An edit that never reached the network.
-    fn rejected(errors: Vec<String>) -> Self {
+    fn rejected(errors: Vec<String>, dry_run: bool) -> Self {
         Self {
             result: EditResult {
                 success: false,
@@ -58,6 +95,8 @@ impl AiTextEditOutcome {
                 errors,
                 warnings: vec![],
             },
+            layout: None,
+            dry_run,
             needs_refresh: false,
         }
     }
@@ -74,6 +113,24 @@ impl StructureDesigner {
     /// session's AI edit log** (`doc/design_ai_edit_history.md` Phase 1),
     /// including on the three paths that reject it outright.
     pub fn ai_text_edit(&mut self, code: &str, replace: bool) -> AiTextEditOutcome {
+        self.ai_text_edit_with_options(code, replace, false)
+    }
+
+    /// [`ai_text_edit`](Self::ai_text_edit), optionally as a **dry run**
+    /// (`doc/design_deliberate_node_placement.md`, "--dry-run").
+    ///
+    /// A dry run runs the entire edit (parse, apply, validate, layout pass)
+    /// and returns the same outcome with `dry_run` set, then reverts it with
+    /// the edit's own undo restore (`TextEditNetworkCommand::restore_before`,
+    /// through [`revert_in_place`](Self::revert_in_place)). Nothing stays: no
+    /// undo entry, no dirty flag, no AI-log record (not even for a rejection),
+    /// no scene refresh.
+    pub fn ai_text_edit_with_options(
+        &mut self,
+        code: &str,
+        replace: bool,
+        dry_run: bool,
+    ) -> AiTextEditOutcome {
         // --- Rejection path 1: no active network -------------------------
         //
         // All three rejection paths are logged, not dropped (D1). A rejected
@@ -86,6 +143,7 @@ impl StructureDesigner {
                     String::new(),
                     code,
                     replace,
+                    dry_run,
                     vec!["No active node network".to_string()],
                 );
             }
@@ -97,13 +155,13 @@ impl StructureDesigner {
                 "Write access to '{}' is locked. To modify this network, ask the user to unlock it from the GUI.",
                 network_name
             );
-            return self.reject_ai_edit(network_name, code, replace, vec![message]);
+            return self.reject_ai_edit(network_name, code, replace, dry_run, vec![message]);
         }
 
         // --- Rejection path 2b: linked content is read-only --------------
         // (`doc/design_library_linking.md` §6). Logged like the CLI lock.
         if let Err(message) = self.ensure_editable(&network_name) {
-            return self.reject_ai_edit(network_name, code, replace, vec![message]);
+            return self.reject_ai_edit(network_name, code, replace, dry_run, vec![message]);
         }
 
         // --- The log's "before" pair (D2, D9) ----------------------------
@@ -116,24 +174,27 @@ impl StructureDesigner {
         // delta. `snapshot_node_positions` is the editor's own identity walk,
         // shared so the layout measurement and the identity match it measures
         // cannot disagree.
-        let (before_text, before_positions, before_wires) =
-            match self.node_type_registry.node_networks.get(&network_name) {
-                Some(network) => (
-                    serialize_network(network, &self.node_type_registry, Some(&network_name)),
-                    snapshot_node_positions(network, &self.node_type_registry),
-                    // The other half of the incremental pass's "before": a
-                    // wire belongs to neither of its ends, so it cannot live in
-                    // the per-node identity map. Keyed by name path like
-                    // everything else, so a `--replace` does not report the
-                    // whole network as newly wired.
-                    layout::collect_all_wires(network),
-                ),
-                // --- Rejection path 3: the network is gone ---------------
-                None => {
-                    let message = format!("Network '{}' not found", network_name);
-                    return self.reject_ai_edit(network_name, code, replace, vec![message]);
-                }
-            };
+        let (before_text, before_positions, before_wires) = match self
+            .node_type_registry
+            .node_networks
+            .get(&network_name)
+        {
+            Some(network) => (
+                serialize_network(network, &self.node_type_registry, Some(&network_name)),
+                snapshot_node_positions(network, &self.node_type_registry),
+                // The other half of the incremental pass's "before": a
+                // wire belongs to neither of its ends, so it cannot live in
+                // the per-node identity map. Keyed by name path like
+                // everything else, so a `--replace` does not report the
+                // whole network as newly wired.
+                layout::collect_all_wires(network),
+            ),
+            // --- Rejection path 3: the network is gone ---------------
+            None => {
+                let message = format!("Network '{}' not found", network_name);
+                return self.reject_ai_edit(network_name, code, replace, dry_run, vec![message]);
+            }
+        };
 
         // Temporarily remove the network from the registry to avoid borrow
         // conflicts. This is necessary because `text_edit_network` needs
@@ -145,7 +206,7 @@ impl StructureDesigner {
             // same map. Kept as a rejection rather than an unwrap so a future
             // reordering degrades to a logged failure instead of a panic.
             let message = format!("Network '{}' not found", network_name);
-            return self.reject_ai_edit(network_name, code, replace, vec![message]);
+            return self.reject_ai_edit(network_name, code, replace, dry_run, vec![message]);
         };
 
         // Snapshot the whole network BEFORE the edit, while it is still out of
@@ -170,6 +231,20 @@ impl StructureDesigner {
         // the undo step puts them back from this.
         let call_sites =
             crate::network_validator::capture_call_sites(&self.node_type_registry, &network_name);
+
+        // A dry run reverts itself from the snapshot just taken, so without one
+        // it cannot promise to leave nothing behind. Refuse before anything
+        // is applied.
+        if dry_run && before_snapshot.is_none() {
+            self.node_type_registry
+                .node_networks
+                .insert(network_name.clone(), network);
+            let message = format!(
+                "Cannot preview an edit of '{}': the network could not be snapshotted",
+                network_name
+            );
+            return self.reject_ai_edit(network_name, code, replace, dry_run, vec![message]);
+        }
 
         // Apply the edit commands
         let mut result = text_edit_network(&mut network, &self.node_type_registry, code, replace);
@@ -269,7 +344,7 @@ impl StructureDesigner {
         } else {
             LayoutPath::None
         };
-        let (after_text, layout_outcome) =
+        let (after_text, mut layout_outcome) =
             match self.node_type_registry.node_networks.get(&network_name) {
                 Some(network) => {
                     let after_positions =
@@ -300,6 +375,10 @@ impl StructureDesigner {
                 }
                 None => (String::new(), LayoutOutcome::default()),
             };
+        layout_outcome.attach_causes(&incremental.report);
+        // The report travels to the AI only when it has something to say.
+        let layout_report =
+            (ran_layout && incremental.report.is_worth_reporting()).then_some(incremental.report);
 
         // The editor's change lists are not the whole story: a `--replace`
         // clears the network *before* a single statement runs, so a script
@@ -337,6 +416,29 @@ impl StructureDesigner {
         record.output_set = result.output_set.clone();
         record.errors = result.errors.clone();
         record.warnings = result.warnings.clone();
+
+        // A dry run ends here. Everything the AI is shown has been computed;
+        // revert with the very restore the edit's undo command would run, and
+        // record nothing: no log entry, no undo step, no dirty flag, no
+        // refresh.
+        if dry_run {
+            if let Some(before) = before_snapshot {
+                self.revert_in_place(UndoRefreshMode::Full, |ctx| {
+                    TextEditNetworkCommand::restore_before(
+                        ctx,
+                        &network_name,
+                        &before,
+                        &call_sites,
+                    );
+                });
+            }
+            return AiTextEditOutcome {
+                result,
+                layout: layout_report,
+                dry_run: true,
+                needs_refresh: false,
+            };
+        }
         self.record_ai_edit(record);
 
         // Did the edit actually change anything? Gates both the dirty flag and
@@ -408,24 +510,30 @@ impl StructureDesigner {
 
         AiTextEditOutcome {
             result,
+            layout: layout_report,
+            dry_run: false,
             needs_refresh: true,
         }
     }
 
     /// Log an edit that never reached the network and build its `EditResult`.
+    /// A dry run is not logged, rejected or not.
     fn reject_ai_edit(
         &mut self,
         network_name: String,
         code: &str,
         replace: bool,
+        dry_run: bool,
         errors: Vec<String>,
     ) -> AiTextEditOutcome {
-        self.record_ai_edit(AiEditRecord::rejected(
-            network_name,
-            code.to_string(),
-            replace,
-            errors.clone(),
-        ));
-        AiTextEditOutcome::rejected(errors)
+        if !dry_run {
+            self.record_ai_edit(AiEditRecord::rejected(
+                network_name,
+                code.to_string(),
+                replace,
+                errors.clone(),
+            ));
+        }
+        AiTextEditOutcome::rejected(errors, dry_run)
     }
 }

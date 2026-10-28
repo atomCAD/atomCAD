@@ -406,7 +406,18 @@ network"`) and **one entry in `StructureDesigner::ai_edit_log`**
   `auto_layout_after_edit` is gone — and a *full* reflow is now only ever
   user-invoked, through `layout_active_network`. The pre-edit pair it needs
   (`snapshot_node_positions` **and** `layout::collect_all_wires`) is taken
-  before the first statement runs, beside the log's own snapshots.
+  before the first statement runs, beside the log's own snapshots. Its
+  `LayoutReport` travels beside the `EditResult` (`AiTextEditOutcome.layout`,
+  serialized together by `AiTextEditOutcome::to_json`), never inside it.
+- **A dry run (`ai_text_edit_with_options(…, dry_run: true)`) runs the whole
+  edit, then reverts it with the edit's own undo restore**
+  (`TextEditNetworkCommand::restore_before` through
+  `StructureDesigner::revert_in_place`). Every side effect a real edit has must
+  therefore be skipped on that path, or undone by that restore: it pushes no
+  command, writes no log entry (rejections included), sets no dirty flag and
+  asks for no refresh. A new side effect added to `ai_text_edit` needs the
+  same treatment (`layout_report_test.rs` pins the undo stack, log and dirty
+  flag; the corpus run pins the design text).
 
 **The log is wider than its name** since Phase 5: `AiEditLog` holds a *second*
 ring of `AiActivityRecord`s — every non-edit CLI request (`/query`,

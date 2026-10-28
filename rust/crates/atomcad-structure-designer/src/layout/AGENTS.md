@@ -10,6 +10,7 @@ Automatic layout algorithms for repositioning nodes in a network.
 | `delta.rs` | `EditDelta` / `diff_scope` — the incremental pass's input |
 | `motion.rs` | `shift_half_plane` / `cascade` / `grow_rect` — the two motion primitives (see below) |
 | `incremental.rs` | The incremental pass, step by step (all eight, and the driver) |
+| `report.rs` | `LayoutReport`: moved nodes with their causes, new nodes' boxes, findings (see below) |
 | `common.rs` | Shared types and constants (`Gap`: the three gap words), depth computation, and the comment-placement pass |
 | `arrange.rs` | `arrange(scope, registry, sizes, ids, ArrangeOp)` — align / stack / distribute / straighten / subset layout over chosen nodes (see below) |
 | `topological_grid.rs` | Simple layered layout (fast, reliable) |
@@ -230,6 +231,28 @@ back to its exact original offset, if that spot is free. It is all-or-nothing
 and has no constant: it can never move a comment away from its anchor, never
 create an overlap, and never act on an anchor it cannot resolve on both the
 before and the after side.
+
+## The report: every move has a cause, recorded at the call site
+
+`doc/design_deliberate_node_placement.md` A3. `layout_incremental` returns a
+`LayoutReport` (`report.rs`), which `ai_text_edit` hands to the AI as the edit
+result's `layout` section and copies into the AI edit log. Three rules:
+
+- **`from` / `to` come from the pass's one before/after diff, never from the
+  primitives**, so a reported move cannot disagree with an actual one. The
+  *why* is recorded separately, into the scope's `Causes`, from what each
+  primitive call returns (`cascade`'s ids, `shift_half_plane`'s
+  `ShiftOutcome` — both halves — `grow_rect`'s moves). The primitives
+  themselves know nothing about causes; keep it that way.
+- **A new motion call in the pass must record a cause.** Forget it and the
+  node is reported with no `cause`; `layout_test_support`'s `run()` and the
+  corpus run both fail on that. The one call that must *not* record is
+  `choose_cascade_dir`'s simulation, which restores what it moved.
+- **Findings are measured independently of the repair**, per scope at the end
+  of its turn, against the pre-edit `PositionSnapshot`: new overlaps at zero
+  clearance, and new same-scope wires left backward. The oracle checks the
+  overlap findings in both directions with its own overlap test, so do not
+  make `check_overlap_findings` call `scope_findings`.
 
 ## `hand_moved` is a tiebreaker, in exactly two places
 

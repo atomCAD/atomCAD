@@ -100,6 +100,8 @@ fn record_to_json(record: &AiEditRecord) -> serde_json::Value {
                 "before": [moved.before.x, moved.before.y],
                 "after": [moved.after.x, moved.after.y],
                 "displacement": moved.displacement(),
+                "cause": moved.cause.map(|cause| cause.as_str()),
+                "why": moved.why,
             })).collect::<Vec<_>>(),
             "delta": record.layout.delta.map(|delta| serde_json::json!({
                 "nodes_added": delta.nodes_added,

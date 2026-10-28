@@ -39,6 +39,24 @@ impl std::fmt::Debug for TextEditNetworkCommand {
     }
 }
 
+impl TextEditNetworkCommand {
+    /// The body of [`undo`](UndoCommand::undo), callable without a command.
+    ///
+    /// An AI edit's `--dry-run` applies the edit and then runs exactly this
+    /// restore in place (`StructureDesigner::revert_in_place`), so a preview
+    /// cannot leave behind anything Ctrl+Z would not also clear — and it needs
+    /// no after-snapshot, which a command would make it take.
+    pub fn restore_before(
+        ctx: &mut UndoContext,
+        network_name: &str,
+        before_snapshot: &SerializableNodeNetwork,
+        call_sites: &[CallSite],
+    ) {
+        ctx.restore_network_keeping_interface(network_name, before_snapshot);
+        ctx.restore_call_sites(network_name, call_sites);
+    }
+}
+
 impl UndoCommand for TextEditNetworkCommand {
     fn description(&self) -> &str {
         self.description
@@ -48,8 +66,12 @@ impl UndoCommand for TextEditNetworkCommand {
     /// ([`UndoContext::restore_network_keeping_interface`]), and the callers'
     /// wiring is handed back for after the refresh's validation.
     fn undo(&self, ctx: &mut UndoContext) {
-        ctx.restore_network_keeping_interface(&self.network_name, &self.before_snapshot);
-        ctx.restore_call_sites(&self.network_name, &self.call_sites);
+        Self::restore_before(
+            ctx,
+            &self.network_name,
+            &self.before_snapshot,
+            &self.call_sites,
+        );
     }
 
     fn redo(&self, ctx: &mut UndoContext) {

@@ -24,6 +24,18 @@
 //! none on disk. Diff the JSON instead and every node in the corpus is
 //! anonymous and therefore `added`.
 //!
+//! # The report and the preview (`doc/design_deliberate_node_placement.md` Phase 3)
+//!
+//! Every generated edit is first run as a **dry run** and then for real, on
+//! the same fresh load. The preview must leave the design bit-identical (the
+//! text a save would write) and its JSON must equal the real edit's apart from
+//! the `dry_run` key: what it shows is what the edit then does. The real
+//! edit's `layout` report is then held to three things: every moved node has a
+//! cause, its moved list is the edit log's (the same before/after diff), and
+//! the key is present exactly when something moved or a finding arose. The
+//! oracle checks the overlap findings in both directions, measuring overlaps
+//! itself.
+//!
 //! # What a failure here means, and what to do with it
 //!
 //! The panic names the network, the edit and the invariant. Reproduce it as a
@@ -35,7 +47,9 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use atomcad_structure_designer::data_type::DataType;
+use atomcad_structure_designer::layout::FindingKind;
 use atomcad_structure_designer::node_network::NodeNetwork;
+use atomcad_structure_designer::serialization::node_networks_serialization::serialize_registry_to_string;
 use atomcad_structure_designer::structure_designer::StructureDesigner;
 use atomcad_structure_designer::text_format::NamePath;
 
@@ -69,6 +83,15 @@ pub fn load(path: &Path) -> StructureDesigner {
     sd.load_node_networks(&path.to_string_lossy())
         .unwrap_or_else(|e| panic!("failed to load corpus `{}`: {e}", path.display()));
     sd
+}
+
+/// The text a save of `sd` would write: what "bit-identical" means for a
+/// whole design, every network included.
+fn saved_text(sd: &mut StructureDesigner) -> String {
+    let rules = sd.cli_access_rules.clone();
+    let mode = sd.direct_editing_mode;
+    serialize_registry_to_string(&mut sd.node_type_registry, None, mode, &rules)
+        .expect("the corpus serializes")
 }
 
 /// The corpus networks worth editing: at least two nodes, matching the
@@ -281,6 +304,9 @@ struct RunStats {
     refused: usize,
     /// Every network the run touched.
     networks: usize,
+    /// Edits whose `layout` report moved at least one existing node, so the
+    /// cause assertions below are known not to be vacuous.
+    reported_moves: usize,
 }
 
 impl RunStats {
@@ -289,6 +315,7 @@ impl RunStats {
             applied: EditKind::ALL.iter().map(|&k| (k, 0)).collect(),
             refused: 0,
             networks: 0,
+            reported_moves: 0,
         }
     }
 }
@@ -328,7 +355,35 @@ fn run_corpus(path: &Path, seed: u64) -> RunStats {
             };
             let before = Drawing::of(network, &sd.node_type_registry);
 
+            // The preview first, on the same load: it must leave the design
+            // exactly as it found it.
+            let text_before = saved_text(&mut sd);
+            let preview = sd.ai_text_edit_with_options(&script, false, true);
+            assert!(
+                saved_text(&mut sd) == text_before,
+                "the dry run changed the design: corpus `{}`, network `{network_name}`, \
+                 {kind:?}, seed {seed}\nscript:\n{script}",
+                path.display()
+            );
+
             let outcome = sd.ai_text_edit(&script, false);
+
+            // ...and what it showed is what the edit then did.
+            let mut preview_json: serde_json::Value =
+                serde_json::from_str(&preview.to_json()).expect("JSON");
+            let real_json: serde_json::Value =
+                serde_json::from_str(&outcome.to_json()).expect("JSON");
+            assert_eq!(preview_json["dry_run"], true);
+            preview_json
+                .as_object_mut()
+                .expect("an object")
+                .remove("dry_run");
+            assert!(
+                preview_json == real_json,
+                "the dry run differs from the edit: corpus `{}`, network `{network_name}`, \
+                 {kind:?}, seed {seed}\nscript:\n{script}\npreview: {preview_json}\nreal:    {real_json}",
+                path.display()
+            );
             // `result.success` folds in a *whole-network* validation verdict, so
             // a corpus network that was already broken would fail every edit
             // however clean. `applied` is the editor's own verdict, which is
@@ -363,10 +418,45 @@ fn run_corpus(path: &Path, seed: u64) -> RunStats {
                     outcome.result.errors
                 )
             };
+            // The report: the log's diff with a cause on every entry, present
+            // exactly when there is something to say.
+            let report = outcome.layout.clone().unwrap_or_default();
+            if outcome.layout.is_some() {
+                assert!(
+                    !report.moved.is_empty() || !report.findings.is_empty(),
+                    "an empty `layout` was reported\n{}",
+                    context()
+                );
+            }
+            if !report.moved.is_empty() {
+                stats.reported_moves += 1;
+            }
+            for entry in &report.moved {
+                assert!(
+                    entry.cause.is_some(),
+                    "{} moved with no cause\n{}",
+                    entry.path.join("/"),
+                    context()
+                );
+            }
+            let reported: HashSet<NamePath> = report.moved.iter().map(|m| m.path.clone()).collect();
+            assert!(
+                reported == moved,
+                "the report's moved list {reported:?} is not the log's {moved:?}\n{}",
+                context()
+            );
+            let overlap_findings: Vec<(NamePath, NamePath)> = report
+                .findings
+                .iter()
+                .filter(|f| f.kind == FindingKind::Overlap)
+                .map(|f| (f.nodes[0].clone(), f.nodes[1].clone()))
+                .collect();
+
             let touched = touched_between(&before, &after, moved);
             // `catch_unwind` only to attach the context; the panic is re-raised.
             let checked = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                 layout_oracle::check(&before, &after, &touched);
+                layout_oracle::check_overlap_findings(&before, &after, &overlap_findings);
             }));
             if let Err(payload) = checked {
                 let message = payload
@@ -398,6 +488,10 @@ fn demolib_survives_every_generated_edit() {
     );
     let stats = run_corpus(&path, 0x5eed_1a70_u64);
     assert!(stats.networks >= 20, "demolib should have many networks");
+    assert!(
+        stats.reported_moves > 0,
+        "no edit moved an existing node, so no cause was ever checked"
+    );
 }
 
 /// The generator is blind, so a kind that silently stopped producing anything

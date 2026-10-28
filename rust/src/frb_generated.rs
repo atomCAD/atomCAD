@@ -795,12 +795,14 @@ fn wire__crate__api__structure_designer__ai_assistant_api__ai_edit_network_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_code = <String>::sse_decode(&mut deserializer);
             let api_replace = <bool>::sse_decode(&mut deserializer);
+            let api_dry_run = <bool>::sse_decode(&mut deserializer);
             deserializer.end();
             transform_result_sse::<_, ()>((move || {
                 let output_ok = Result::<_, ()>::Ok(
                     crate::api::structure_designer::ai_assistant_api::ai_edit_network(
                         api_code,
                         api_replace,
+                        api_dry_run,
                     ),
                 )?;
                 Ok(output_ok)
@@ -19970,12 +19972,16 @@ impl SseDecode for crate::api::structure_designer::ai_history_api::APIMovedNode 
         let mut var_before = <crate::api::common_api_types::APIVec2>::sse_decode(deserializer);
         let mut var_after = <crate::api::common_api_types::APIVec2>::sse_decode(deserializer);
         let mut var_displacement = <f64>::sse_decode(deserializer);
+        let mut var_cause = <String>::sse_decode(deserializer);
+        let mut var_why = <String>::sse_decode(deserializer);
         return crate::api::structure_designer::ai_history_api::APIMovedNode {
             path: var_path,
             depth: var_depth,
             before: var_before,
             after: var_after,
             displacement: var_displacement,
+            cause: var_cause,
+            why: var_why,
         };
     }
 }
@@ -31139,6 +31145,8 @@ impl flutter_rust_bridge::IntoDart
             self.before.into_into_dart().into_dart(),
             self.after.into_into_dart().into_dart(),
             self.displacement.into_into_dart().into_dart(),
+            self.cause.into_into_dart().into_dart(),
+            self.why.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -37510,6 +37518,8 @@ impl SseEncode for crate::api::structure_designer::ai_history_api::APIMovedNode 
         <crate::api::common_api_types::APIVec2>::sse_encode(self.before, serializer);
         <crate::api::common_api_types::APIVec2>::sse_encode(self.after, serializer);
         <f64>::sse_encode(self.displacement, serializer);
+        <String>::sse_encode(self.cause, serializer);
+        <String>::sse_encode(self.why, serializer);
     }
 }
 

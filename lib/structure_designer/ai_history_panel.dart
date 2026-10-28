@@ -1419,7 +1419,8 @@ class _LayoutTab extends StatelessWidget {
   }
 }
 
-/// One moved node: its path, where it went, and how far.
+/// One moved node: its path, where it went, how far, and why (the layout
+/// pass's cause, with its reason in the tooltip).
 ///
 /// Public for the same reason [AiHistoryDiffHunk] is — the widget test pumps it
 /// directly. The path cell is a [NodeNameLink]; the coordinates are not.
@@ -1464,6 +1465,19 @@ class AiHistoryMovedNodeRow extends StatelessWidget {
               moved.displacement.toStringAsFixed(1),
               textAlign: TextAlign.right,
               style: _monoStyle,
+            ),
+          ),
+          // Why the layout pass moved it (`grow` / `auto`); the reason it
+          // recorded is in the tooltip.
+          Expanded(
+            flex: 2,
+            child: Tooltip(
+              message: moved.why,
+              child: Text(
+                moved.cause.isEmpty ? '—' : moved.cause,
+                textAlign: TextAlign.right,
+                style: _monoStyle.copyWith(color: Colors.white54),
+              ),
             ),
           ),
         ],

@@ -71,6 +71,8 @@ pub fn ai_query_network() -> String {
 /// # Arguments
 /// * `code` - The edit commands in text format
 /// * `replace` - If true, replace entire network; if false, incremental merge
+/// * `dry_run` - If true, run the whole edit and report it, then revert it:
+///   no undo step, no dirty flag, no AI-log entry, no refresh
 ///
 /// # Returns
 /// A JSON string containing the `EditResult` with details of what was changed:
@@ -81,6 +83,10 @@ pub fn ai_query_network() -> String {
 /// - `connections_made` - Descriptions of wire connections
 /// - `errors` - Error messages if any
 /// - `warnings` - Warning messages if any
+/// - `layout` - What the layout pass did, when there is something to say: new
+///   nodes' boxes, existing nodes that moved with a cause, findings
+///   (`doc/design_deliberate_node_placement.md` A3)
+/// - `dry_run` - `true` on a preview, absent otherwise
 ///
 /// The whole call is recorded as **one undo step** ("AI edit network"), so a
 /// bad edit — including one that emptied a zone body — is recoverable with
@@ -92,7 +98,7 @@ pub fn ai_query_network() -> String {
 /// output sphere1
 /// ```
 #[flutter_rust_bridge::frb(sync)]
-pub fn ai_edit_network(code: String, replace: bool) -> String {
+pub fn ai_edit_network(code: String, replace: bool, dry_run: bool) -> String {
     unsafe {
         with_mut_cad_instance_or(
             |cad_instance| {
@@ -101,18 +107,20 @@ pub fn ai_edit_network(code: String, replace: bool) -> String {
                 // `StructureDesigner::ai_text_edit`. All that is left up here
                 // is the scene refresh, which only `api/` can drive, and the
                 // JSON the AI reads.
-                let outcome = cad_instance.structure_designer.ai_text_edit(&code, replace);
+                //
+                // `dry_run` previews: the edit runs in full and reverts itself,
+                // and `needs_refresh` comes back false so nothing is redrawn.
+                let outcome = cad_instance
+                    .structure_designer
+                    .ai_text_edit_with_options(&code, replace, dry_run);
 
                 if outcome.needs_refresh {
                     refresh_structure_designer_auto(cad_instance);
                 }
 
-                serde_json::to_string(&outcome.result).unwrap_or_else(|e| {
-                    format!(
-                        r#"{{"success":false,"errors":["Failed to serialize result: {}"]}}"#,
-                        e
-                    )
-                })
+                // The `EditResult` with the layout report (and `dry_run`)
+                // beside it, as one object.
+                outcome.to_json()
             },
             r#"{"success":false,"errors":["Could not access structure designer"]}"#.to_string(),
         )

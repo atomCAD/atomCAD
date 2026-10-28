@@ -14,7 +14,7 @@ use glam::DVec2;
 
 use atomcad_structure_designer::data_type::DataType;
 use atomcad_structure_designer::layout::{
-    LayoutAlgorithm, WireKey, collect_all_wires, layout_incremental,
+    LayoutAlgorithm, LayoutReport, WireKey, collect_all_wires, layout_incremental,
 };
 use atomcad_structure_designer::node_data::NoData;
 use atomcad_structure_designer::node_network::{Node, NodeNetwork};
@@ -179,14 +179,28 @@ impl Fixture {
 
     /// Run the incremental pass and assert every whole-pass invariant.
     pub fn run(&mut self) -> Outcome {
-        let moved = layout_incremental(
+        let report = layout_incremental(
             &mut self.network,
             &self.registry,
             &self.snapshot,
             &self.wires,
             LayoutAlgorithm::Sugiyama,
         )
-        .moved;
+        .report;
+        // Every move the pass makes to an existing node must say why
+        // (`doc/design_deliberate_node_placement.md` A3).
+        for entry in &report.moved {
+            assert!(
+                entry.cause.is_some(),
+                "{} moved with no recorded cause",
+                entry.path.join("/")
+            );
+        }
+        let moved: Vec<(NamePath, DVec2, DVec2)> = report
+            .moved
+            .iter()
+            .map(|entry| (entry.path.clone(), entry.from, entry.to))
+            .collect();
         let after = Drawing::of(&self.network, &self.registry);
         let moved_paths: HashSet<NamePath> =
             moved.iter().map(|(path, _, _)| path.clone()).collect();
@@ -195,7 +209,11 @@ impl Fixture {
             &after,
             &Touched::new(self.delta_paths(&after), moved_paths),
         );
-        Outcome { moved, after }
+        Outcome {
+            moved,
+            report,
+            after,
+        }
     }
 
     /// The paths the delta accounts for: added, grown or removed. Derived from
@@ -238,7 +256,11 @@ impl Fixture {
 
 /// What one pass did.
 pub struct Outcome {
+    /// `(path, from, to)` for every **existing** node the pass moved; the new
+    /// nodes it placed are in `report.auto_placed`.
     pub moved: Vec<(NamePath, DVec2, DVec2)>,
+    /// The pass's whole report, causes and findings included.
+    pub report: LayoutReport,
     pub after: Drawing,
 }
 

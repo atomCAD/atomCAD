@@ -310,6 +310,49 @@ Two things a body edit commonly trips on, both reported this way:
 edit` reading from **stdin** stops at the first blank line. To feed query output
 straight back, strip the blank lines, or pass it via `--code` with `\n` escapes.
 
+#### The `layout` section: what the edit did to the canvas
+
+The text format carries no positions, so the JSON is also the only place you
+learn what an edit did to the drawing. When it moved a node that already
+existed, or left a problem behind, the result has a `layout` object:
+
+```json
+"layout": {
+  "auto_placed": [ { "node": "n", "box": [520, 100, 160, 60] } ],
+  "moved": [
+    { "node": "b", "from": [520, 100], "to": [730, 100], "cause": "auto",
+      "why": "made room for new node n" }
+  ],
+  "findings": [],
+  "warnings": []
+}
+```
+
+- **Coordinates:** canvas pixels, x right, y **down**; a position is a node's
+  top-left corner, a `box` is `[x, y, width, height]`. Body nodes are in body
+  coordinates (origin at the body's top-left). Whole pixels, rounded.
+- `auto_placed` — every node the edit created, with its **real rendered box**
+  (an expanded `map` is far wider than an ordinary 160 px node).
+- `moved` — every *pre-existing* node whose position changed: `from` / `to`,
+  the `cause` of its first move, a short `why`, and `also` (later, different
+  causes) when there were any.
+- `cause` is `grow` (a node the edit enlarged pushed it) or `auto` (room made
+  for a new node, a new wire kept running left to right, a comment returned
+  beside its anchor).
+- `findings` — what this edit **created** and nothing repaired, one line each:
+  `overlap` (two nodes overlap that did not before) or `backward_wire` (a new
+  wire runs right to left, e.g. because it closes a cycle). Pre-existing
+  overlaps and backward wires are the user's baseline and never reported.
+- `warnings` — always empty for now.
+- **No `layout` key** means no existing node moved and nothing was found.
+
+#### `--dry-run`: preview an edit
+
+`atomcad-cli edit --dry-run …` runs the whole edit (parse, apply, validate,
+layout), prints exactly the JSON the real edit would print plus
+`"dry_run": true`, and then reverts it: no undo step, no dirty flag, no AI
+History entry, no redraw. Combines with `--replace` and with stdin input.
+
 #### Every edit is one undo step
 
 Each `edit` call is recorded in the app's undo stack as a single step labelled
@@ -373,6 +416,9 @@ atomcad-cli edit --code="..." --replace
 # interactively, an empty line or "." sends)
 atomcad-cli edit
 atomcad-cli edit --replace
+
+# Preview: same JSON (plus "dry_run": true), then everything is reverted
+atomcad-cli edit --dry-run --code="..."
 ```
 
 **Query output format:**

@@ -13,6 +13,11 @@
 //! the two [`hand_moved`](crate::node_network::Node::hand_moved) tiebreakers
 //! that make the fitting prefer to disturb a node nobody placed deliberately.
 //!
+//! `doc/design_deliberate_node_placement.md` Phase 3 made the pass explain
+//! itself: every motion call records why it moved what it moved, and the
+//! driver returns a [`LayoutReport`](crate::layout::LayoutReport) instead of a
+//! bare move list (`report.rs`).
+//!
 //! # The one rule everything else depends on
 //!
 //! **An added node is invisible until its block is placed.** It is not an
@@ -34,8 +39,11 @@ use crate::layout::common::{
 };
 use crate::layout::delta::{DeltaTotals, EditDelta, WireKey, diff_scope, scopes_inside_out};
 use crate::layout::motion::{
-    CascadeDir, GAP, Rect, cascade, grow_rect, measure_scope, shift_half_plane, snap_shift_line,
-    upstream_closure,
+    CascadeDir, GAP, Rect, ShiftOutcome, cascade, grow_rect, measure_scope, shift_half_plane,
+    snap_shift_line, upstream_closure,
+};
+use crate::layout::report::{
+    Causes, LayoutMove, LayoutReport, MoveCause, PlacedBox, scope_findings,
 };
 use crate::layout::size::{rendered_body_size, rendered_node_size};
 use crate::node_layout::{FIRST_PIN_OFFSET, HOF_BODY_BOTTOM_PADDING, PER_PARAM_HEIGHT};
@@ -95,6 +103,19 @@ pub fn repair_grown(
     sizes: &HashMap<u64, DVec2>,
     delta: &EditDelta,
 ) -> Vec<(u64, DVec2, DVec2)> {
+    let names = unique_node_names(network);
+    repair_grown_recorded(network, sizes, delta, &mut Causes::default(), &names)
+}
+
+/// [`repair_grown`], recording a [`MoveCause::Grow`] for every node each
+/// growth moved, naming the node that grew.
+fn repair_grown_recorded(
+    network: &mut NodeNetwork,
+    sizes: &HashMap<u64, DVec2>,
+    delta: &EditDelta,
+    causes: &mut Causes,
+    names: &HashMap<u64, String>,
+) -> Vec<(u64, DVec2, DVec2)> {
     // `id -> (first old position, latest new position)`, so a node moved twice
     // reports the net move rather than two overlapping ones.
     let mut net_moves: HashMap<u64, (DVec2, DVec2)> = HashMap::new();
@@ -102,7 +123,13 @@ pub fn repair_grown(
     let mut grown = delta.grown.clone();
     grown.sort_by_key(|&(id, _, _)| id);
     for (id, old, new) in grown {
-        for (moved, from, to) in grow_rect(network, sizes, id, old, new) {
+        let moves = grow_rect(network, sizes, id, old, new);
+        causes.record(
+            moves.iter().map(|&(moved, _, _)| moved),
+            MoveCause::Grow,
+            &format!("made room for {} as it grew", name_of(names, id)),
+        );
+        for (moved, from, to) in moves {
             net_moves
                 .entry(moved)
                 .and_modify(|entry| entry.1 = to)
@@ -226,22 +253,27 @@ impl Anchors {
 ///    ([`restore_drifted_comments`]).
 ///
 /// `frame` is `Some` when `scope` is an HOF body, and carries the synthesized
-/// anchors and the slack the body still has. Returns `(id, from, to)` for every
-/// node whose position changed, ascending id — including the added nodes, which
-/// move from the throwaway position the editor gave them at creation
-/// (`auto_layout::calculate_new_node_position`) to wherever their block landed.
+/// anchors and the slack the body still has. Returns every node whose position
+/// changed, ascending id — including the added nodes, which move from the
+/// throwaway position the editor gave them at creation
+/// (`auto_layout::calculate_new_node_position`) to wherever their block landed —
+/// each with the causes recorded for it (`report.rs`, "Causes are recorded at
+/// the call sites").
 pub fn layout_scope(
     scope: &mut NodeNetwork,
     registry: &NodeTypeRegistry,
     delta: &EditDelta,
     frame: Option<&BodyFrame>,
     algorithm: LayoutAlgorithm,
-) -> Vec<(u64, DVec2, DVec2)> {
+) -> Vec<ScopeMove> {
     let before: HashMap<u64, DVec2> = scope
         .nodes
         .iter()
         .map(|(&id, node)| (id, node.position))
         .collect();
+    // Names do not change during layout, so one lookup serves every `why`.
+    let names = unique_node_names(scope);
+    let mut causes = Causes::default();
 
     // --- Step 1: take stock -------------------------------------------------
     let added: HashSet<u64> = delta
@@ -258,32 +290,86 @@ pub fn layout_scope(
         .collect();
 
     // --- Step 2: repair grown nodes -----------------------------------------
-    repair_grown(scope, &sizes, delta);
+    repair_grown_recorded(scope, &sizes, delta, &mut causes, &names);
 
     // --- Step 3: lay the added nodes out as blocks --------------------------
     let blocks = build_blocks(scope, registry, &added, &measured, algorithm);
 
     // --- Steps 4 and 5: place them ------------------------------------------
-    place_blocks(scope, &mut sizes, &blocks, frame);
+    place_blocks(scope, &mut sizes, &blocks, frame, &mut causes, &names);
 
     // --- Step 6: repair the backward wires this edit created -----------------
-    repair_backward_wires(scope, &sizes, delta, &added);
+    repair_backward_wires(scope, &sizes, delta, &added, &mut causes);
 
     // --- Step 7: place the comments this edit created ------------------------
-    place_new_comments(scope, registry, &mut sizes, &added, frame);
+    place_new_comments(
+        scope,
+        registry,
+        &mut sizes,
+        &added,
+        frame,
+        &mut causes,
+        &names,
+    );
 
     // --- Step 8: pull a drifted comment back to its anchor -------------------
-    restore_drifted_comments(scope, registry, &sizes, &added, &before, frame);
+    restore_drifted_comments(scope, registry, &sizes, &added, &before, frame, &mut causes);
 
-    let mut moves: Vec<(u64, DVec2, DVec2)> = before
+    let mut moves: Vec<ScopeMove> = before
         .iter()
         .filter_map(|(&id, &from)| {
             let to = scope.nodes.get(&id)?.position;
-            (to != from).then_some((id, from, to))
+            (to != from).then(|| ScopeMove {
+                id,
+                from,
+                to,
+                causes: causes.of(id).to_vec(),
+            })
         })
         .collect();
-    moves.sort_by_key(|&(id, _, _)| id);
+    moves.sort_by_key(|m| m.id);
     moves
+}
+
+/// One node a scope's pass moved, with every cause recorded for it in order.
+#[derive(Debug, Clone)]
+pub struct ScopeMove {
+    pub id: u64,
+    pub from: DVec2,
+    pub to: DVec2,
+    pub causes: Vec<(MoveCause, String)>,
+}
+
+/// A node's name for a `why`, or its id if it has none.
+fn name_of(names: &HashMap<u64, String>, id: u64) -> String {
+    names.get(&id).cloned().unwrap_or_else(|| format!("#{id}"))
+}
+
+/// "new node a" / "new nodes a, b, c and 2 more": what a block is called in a
+/// `why`.
+fn describe_new(names: &HashMap<u64, String>, ids: &[u64]) -> String {
+    const SHOWN: usize = 3;
+    let listed: Vec<String> = ids
+        .iter()
+        .take(SHOWN)
+        .map(|&id| name_of(names, id))
+        .collect();
+    let more = ids.len().saturating_sub(SHOWN);
+    let noun = if ids.len() == 1 { "node" } else { "nodes" };
+    if more == 0 {
+        format!("new {noun} {}", listed.join(", "))
+    } else {
+        format!("new {noun} {} and {more} more", listed.join(", "))
+    }
+}
+
+/// Record both halves of a [`ShiftOutcome`] under one cause.
+fn record_shift(causes: &mut Causes, outcome: &ShiftOutcome, why: &str) {
+    causes.record(
+        outcome.shifted.iter().chain(outcome.pushed.iter()).copied(),
+        MoveCause::Auto,
+        why,
+    );
 }
 
 /// **Step 3.** Split the added nodes into connected components and lay each one
@@ -409,6 +495,8 @@ fn place_blocks(
     sizes: &mut HashMap<u64, DVec2>,
     blocks: &[Block],
     frame: Option<&BodyFrame>,
+    causes: &mut Causes,
+    names: &HashMap<u64, String>,
 ) {
     let mut order: Vec<usize> = (0..blocks.len()).collect();
     let keys: Vec<(f64, u64)> = blocks
@@ -430,16 +518,20 @@ fn place_blocks(
     });
 
     for index in order {
-        place_block(scope, sizes, &blocks[index], frame);
+        let why = format!("made room for {}", describe_new(names, &blocks[index].ids));
+        place_block(scope, sizes, &blocks[index], frame, causes, &why);
     }
 }
 
-/// Steps 4 and 5 for one block.
+/// Steps 4 and 5 for one block. Every move the placement causes is recorded
+/// with `why`.
 fn place_block(
     scope: &mut NodeNetwork,
     sizes: &mut HashMap<u64, DVec2>,
     block: &Block,
     frame: Option<&BodyFrame>,
+    causes: &mut Causes,
+    why: &str,
 ) {
     if block.ids.is_empty() {
         return;
@@ -448,9 +540,9 @@ fn place_block(
     // Step 4 may widen the drawing (the "no room" case), so it takes the
     // network mutably; the anchors it reasons about were read before that, and
     // the shift it performs moves only nodes at or right of the block's own x.
-    let target = target_position(scope, sizes, block, &anchors, frame);
+    let target = target_position(scope, sizes, block, &anchors, frame, causes, why);
     let (origin, push) = fit(scope, sizes, block, target, frame);
-    commit_block(scope, sizes, block, origin, push);
+    commit_block(scope, sizes, block, origin, push, causes, why);
 }
 
 /// Put `block` down at `origin`, cascade the drawing out of the way if the fit
@@ -464,6 +556,8 @@ fn commit_block(
     block: &Block,
     origin: DVec2,
     push: bool,
+    causes: &mut Causes,
+    why: &str,
 ) {
     for &id in &block.ids {
         let Some(rect) = block.rects.get(&id) else {
@@ -479,7 +573,8 @@ fn commit_block(
         // cascade cannot push them — only the drawing they landed on.
         let r = Rect::new(origin, block.size);
         let dir = choose_cascade_dir(scope, sizes, r);
-        cascade(scope, sizes, r, dir, &HashSet::new(), &HashSet::new());
+        let moved = cascade(scope, sizes, r, dir, &HashSet::new(), &HashSet::new());
+        causes.record(moved, MoveCause::Auto, why);
     }
 
     for &id in &block.ids {
@@ -670,6 +765,8 @@ fn target_position(
     block: &Block,
     anchors: &Anchors,
     frame: Option<&BodyFrame>,
+    causes: &mut Causes,
+    why: &str,
 ) -> DVec2 {
     let bbox = drawing_bbox(scope, sizes);
     let width = block.size.x;
@@ -716,7 +813,8 @@ fn target_position(
                     .map(|anchor| anchor.rect.left())
                     .fold(f64::INFINITY, f64::min);
                 let threshold = snap_shift_line(scope, sizes, x_min, right_end, &fixed);
-                shift_half_plane(scope, sizes, threshold, x_min - x_max, &fixed);
+                let outcome = shift_half_plane(scope, sizes, threshold, x_min - x_max, &fixed);
+                record_shift(causes, &outcome, why);
             }
             x_min
         }
@@ -942,6 +1040,7 @@ fn repair_backward_wires(
     sizes: &HashMap<u64, DVec2>,
     delta: &EditDelta,
     added: &HashSet<u64>,
+    causes: &mut Causes,
 ) {
     if delta.added_wires.is_empty() {
         return;
@@ -994,7 +1093,12 @@ fn repair_backward_wires(
         }
         let right_end = destination.left();
         let threshold = snap_shift_line(scope, sizes, right_end, right_end, &fixed);
-        shift_half_plane(scope, sizes, threshold, deficit, &fixed);
+        let outcome = shift_half_plane(scope, sizes, threshold, deficit, &fixed);
+        record_shift(
+            causes,
+            &outcome,
+            &format!("keeps wire {source_name} -> {destination_name} forward"),
+        );
     }
 }
 
@@ -1026,6 +1130,8 @@ fn place_new_comments(
     sizes: &mut HashMap<u64, DVec2>,
     added: &HashSet<u64>,
     frame: Option<&BodyFrame>,
+    causes: &mut Causes,
+    names: &HashMap<u64, String>,
 ) {
     let mut comments: Vec<u64> = added
         .iter()
@@ -1040,12 +1146,13 @@ fn place_new_comments(
         };
         let size = rendered_node_size(node, registry);
         let block = Block::single(id, size);
+        let why = format!("made room for new comment {}", name_of(names, id));
 
         let positions = placed_positions(scope, sizes);
         let Some(target) = anchor_placement_box(scope, registry, &positions, id) else {
             // Unanchored, or anchored at something this pass has no position
             // for: an anchorless block.
-            place_block(scope, sizes, &block, frame);
+            place_block(scope, sizes, &block, frame, causes, &why);
             continue;
         };
 
@@ -1069,7 +1176,7 @@ fn place_new_comments(
                 fit(scope, sizes, &block, start, frame)
             }
         };
-        commit_block(scope, sizes, &block, origin, push);
+        commit_block(scope, sizes, &block, origin, push, causes, &why);
     }
 }
 
@@ -1096,6 +1203,7 @@ fn restore_drifted_comments(
     added: &HashSet<u64>,
     before: &HashMap<u64, DVec2>,
     frame: Option<&BodyFrame>,
+    causes: &mut Causes,
 ) {
     // The pre-edit drawing: the placed set at the positions it held when this
     // scope's pass began. Added nodes are excluded, exactly as they are from
@@ -1143,6 +1251,7 @@ fn restore_drifted_comments(
         }
         if let Some(node) = scope.nodes.get_mut(&id) {
             node.position = target;
+            causes.record([id], MoveCause::Auto, "returned beside its anchor");
         }
     }
 }
@@ -1154,13 +1263,15 @@ fn restore_drifted_comments(
 /// What one whole run of [`layout_incremental`] did.
 ///
 /// The two halves answer different questions and neither substitutes for the
-/// other: `moved` is what the pass *did to the drawing*, `totals` is what the
-/// edit *asked it to do*. A long `moved` against a one-node `totals` is the
-/// signal the AI edit log exists to surface.
+/// other: `report` is what the pass *did to the drawing* and why, `totals` is
+/// what the edit *asked it to do*. A long `report.moved` against a one-node
+/// `totals` is the signal the AI edit log exists to surface.
 #[derive(Debug, Default, Clone)]
 pub struct IncrementalOutcome {
-    /// `(name path, from, to)` for every node that moved, sorted by path.
-    pub moved: Vec<(NamePath, DVec2, DVec2)>,
+    /// Every existing node that moved (with its cause), every new node with
+    /// its final box, and the findings — the edit result's `layout` section
+    /// (`doc/design_deliberate_node_placement.md` A3).
+    pub report: LayoutReport,
     /// The edit's delta, summed over every scope.
     pub totals: DeltaTotals,
 }
@@ -1182,11 +1293,16 @@ pub struct IncrementalOutcome {
 /// `snapshot` and `before_wires` are the pre-edit pair
 /// (`text_format::snapshot_node_positions` and
 /// [`collect_all_wires`](crate::layout::collect_all_wires)), both taken before
-/// the edit ran. Returns the moves — `(name path, from, to)`, sorted by path,
-/// the name-path keying every part of this design uses since a `--replace`
-/// mints fresh ids — together with the whole edit's [`DeltaTotals`], which the
-/// AI edit log records beside them so a move can be read against whether the
-/// edit had any business touching that scope.
+/// the edit ran. Returns the [`LayoutReport`] — keyed by name path, as every
+/// part of this design is since a `--replace` mints fresh ids — together with
+/// the whole edit's [`DeltaTotals`], which the AI edit log records beside it so
+/// a move can be read against whether the edit had any business touching that
+/// scope.
+///
+/// A node is *new* (reported in `auto_placed`) when it is in its scope's
+/// `added` set, and *existing* (reported in `moved`, if it moved) otherwise.
+/// Findings are measured per scope at the end of that scope's turn: nothing a
+/// later, outer scope does moves a body's nodes in the body's own frame.
 pub fn layout_incremental(
     network: &mut NodeNetwork,
     registry: &NodeTypeRegistry,
@@ -1195,7 +1311,6 @@ pub fn layout_incremental(
     algorithm: LayoutAlgorithm,
 ) -> IncrementalOutcome {
     let mut outcome = IncrementalOutcome::default();
-    let moved = &mut outcome.moved;
 
     for (scope_ids, scope_names) in scopes_inside_out(network) {
         let Some(delta) = diff_scope(
@@ -1224,17 +1339,50 @@ pub fn layout_incremental(
         };
         let moves = layout_scope(scope, registry, &delta, frame.as_ref(), algorithm);
         let unique = unique_node_names(scope);
-        for (id, from, to) in moves {
-            let Some(name) = unique.get(&id).cloned() else {
+        let path_of = |id: u64| -> Option<NamePath> {
+            let mut path = scope_names.clone();
+            path.push(unique.get(&id)?.clone());
+            Some(path)
+        };
+        let added: HashSet<u64> = delta.added.iter().copied().collect();
+        for scope_move in moves {
+            if added.contains(&scope_move.id) {
+                continue; // reported below, with its final box
+            }
+            let Some(path) = path_of(scope_move.id) else {
                 continue;
             };
-            let mut path = scope_names.clone();
-            path.push(name);
-            moved.push((path, from, to));
+            outcome.report.moved.push(LayoutMove::new(
+                path,
+                scope_move.from,
+                scope_move.to,
+                &scope_move.causes,
+            ));
         }
+
+        // Measured after the pass, so the boxes are the ones that rendered.
+        let sizes = measure_scope(scope, registry);
+        for &id in &delta.added {
+            let (Some(path), Some(node), Some(&size)) =
+                (path_of(id), scope.nodes.get(&id), sizes.get(&id))
+            else {
+                continue;
+            };
+            outcome.report.auto_placed.push(PlacedBox {
+                path,
+                rect: Rect::new(node.position, size),
+            });
+        }
+        outcome.report.findings.extend(scope_findings(
+            scope,
+            &sizes,
+            &scope_names,
+            snapshot,
+            &delta.added_wires,
+        ));
     }
 
-    moved.sort_by(|a, b| a.0.cmp(&b.0));
+    outcome.report.sort();
     outcome
 }
 
