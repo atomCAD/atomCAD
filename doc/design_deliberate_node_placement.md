@@ -67,8 +67,8 @@ the statement runs, not from where a query saw it.
 arranges or straightens nodes it did not create only when the user asks. This
 is skill guidance, not enforced in code: the user may well ask. The agent
 cannot remember across conversations which nodes it created, so ownership is
-read from the `hand` tag (D12): a node without it is the AI's, and a node with
-it is the user's. An AI node the user later drags becomes the user's.
+read from the `ai` tag (D12): a node with it is the AI's, and every other node
+is the user's. An AI node the user later drags becomes the user's.
 
 **D4. The AI chooses the operation, never its parameters.** A statement may
 name the direction in which the nodes it lands on are pushed (`push down`).
@@ -86,9 +86,15 @@ ability to leave a broken drawing.
 **D6. Statements run in written order, and what they relate to stays put.**
 The layout statements form a small sequential program. Each one sees the
 drawing as the earlier ones left it, so the AI can reason about its script
-line by line. To **pin** a node is to add it to the fixed set: no later step
-of the pass moves it, and other nodes are moved around it instead. Pinning
-happens at two points:
+line by line. To **pin** a node is to hold it in every later **cascade**: no
+vertical push and no automatic placement moves it, and other nodes are moved
+around it instead. A pinned node is *not* added to the `fixed` set of a
+half-plane shift. That set must stay exactly an upstream closure, because the
+closure is the whole wire-safety argument of `shift_half_plane`
+(`layout/AGENTS.md`, "Two motion primitives"). A node pinned without its
+upstream would let its producer move right past it. So a later rightward shift
+carries a pinned node rigidly along with everything else on its side of the
+line. Pinning happens at two points:
 
 - **During the statements,** a node a statement places or arranges is pinned
   as soon as that statement finishes. Whatever it lands on is pushed out of
@@ -96,10 +102,17 @@ happens at two points:
   finds cheapest. A placed node never slides aside on its own.
 - **After the last statement,** every node a statement placed, moved, arranged
   or *measured against* (its targets) is pinned for the automatic steps that
-  follow. Room-making for unplaced nodes and backward-wire repair work around
-  them, so a relation the AI wrote still holds when the edit ends. The
-  pseudo-target `all` pins nothing; otherwise one `below all` would freeze
-  the whole drawing.
+  follow. The pseudo-target `all` pins nothing; otherwise one `below all`
+  would freeze the whole drawing.
+
+What survives the end of the edit is therefore precise. A **vertical**
+relation (`below`, `top_even_with`, `straight_from`, …) holds exactly, because
+only cascades move nodes vertically and they never move a pinned node. A
+**horizontal** relation holds exactly when both ends are on the same side of
+every later shift line. When a shift line falls between them, the gap widens by
+the shift and order is kept. Such a move is reported like any other (`auto`,
+with the shift's cause), so the AI sees it. Nothing ever reverses a relation
+or narrows a gap.
 
 Between statements, a target is not pinned. A later statement may push an
 earlier one's target, but that is the AI's own program doing it, visible in
@@ -127,16 +140,26 @@ GUI arrange happen and can judge an overlap at once. Nobody is watching the
 canvas while the AI works, so an AI `arrange` / `straighten` pushes what it
 lands on (and reports it).
 
-**D12. `hand_moved` means "a human placed or moved this".** Until now it was
-set only by a drag. It is now also set on every node a GUI action creates:
-the add-node menu, a drop from the panel, paste and duplicate,
-insert-on-wire, and GUI commands that position nodes themselves
-(promote-to-parameter, factor selection, inline). Those nodes are the user's
-even where the code chose the spot. GUI arrange commands set it too, because
-a human ordered them. Nodes an AI edit creates or places, explicitly or
-automatically, never get it. Nodes created in the GUI before this change load
-without it. That legacy gap is accepted: such nodes look like the AI's until
-the user drags them.
+**D12. Ownership is a runtime-only `ai_placed` flag, and `hand_moved` is
+unchanged.** `Node::ai_placed` is set on every node an AI edit creates. It is
+cleared when a human positions the node: a drag (`end_move_nodes`) or a GUI
+arrange command. Copies made by paste and duplicate do not carry it, because
+the human placed them. Nothing else sets it. It is **not serialized**, so
+a reload makes every node the user's.
+
+The flag tags the AI's nodes rather than the user's because every gap then
+errs the safe way. A node from an older file, a reloaded session, or any path
+that rebuilds a node from its serialized form (some undo restores do) comes
+back untagged. It then counts as the user's, and the AI leaves it alone
+unless asked. Tagging the user's nodes instead would make every such gap hand
+the user's drawing to the AI. It would also need every GUI creation path
+instrumented, and it would change `hand_moved`. That flag already has three
+uses built on "a human dragged this deliberately": Step 5b's cascade direction,
+Step 5a's slide extension, and `respect_hand_moved_in_reflow`. Setting it on
+every GUI-created node would let it fire nearly everywhere, and the reflow
+preference would pin almost the whole drawing. `hand_moved` therefore keeps
+its meaning. Its only setters are the drag and the GUI Arrange commands
+(B2), and both are deliberate human placements.
 
 ---
 
@@ -175,9 +198,9 @@ AI means to use.
 
 ```
 # Main: extent (100,20)–(1150,490), 11 nodes; 7 in box (0,0)–(700,600)
-w        100,100  160×60   hand
-h        100,190  160×60   hand
-d        100,280  160×60   hand
+w        100,100  160×60
+h        100,190  160×60
+d        100,280  160×60
 note     100,370  180×80   comment
 dims     310,160  160×110
 hole_r   310,390  160×60
@@ -191,7 +214,7 @@ row      hole_r, hole       gap 50
 |---|---|
 | Header | network (and scope) name, the **extent** (bounding box of all nodes in the scope, whatever the filter), node count, and the filter's match count. Everything outside the extent is free. |
 | Node lines | `name  x,y  w×h  [tags]`, sorted by top then left. Names are spelled as `query` spells them (backtick-quoted when needed, `/`-paths never needed since a listing is one scope). |
-| Tags | `hand`: a human placed or moved it (`hand_moved`, D12), so it is the user's node and is left alone unless asked. `comment`: a comment box. `body`: an expanded HOF; query inside with `--scope`. |
+| Tags | `ai`: an AI edit created it in this session and no human has positioned it since (`ai_placed`, D12). Every untagged node is the user's and is left alone unless asked. `comment`: a comment box. `body`: an expanded HOF; query inside with `--scope`. |
 | Groups | maximal **columns** (≥ 2 nodes, lefts within 8 px, consecutive vertical gaps ≤ 60 px) and **rows** (≥ 2 nodes, tops within 8 px, consecutive horizontal gaps ≤ 100 px), detected over the whole scope. A group is listed if any member is selected, and members outside the selection are shown as `…`. `gap` is the median gap. |
 
 Groups are the only inference in the output, and they are labelled as such.
@@ -260,7 +283,8 @@ follows the first token, so a node named `place` stays legal (`place = int { …
 | `gap: G` | — | replaces the direction's default `normal` gap |
 | `dx: n`, `dy: n` | — | shifts the clause's result by a fixed offset; any position near a target is reachable |
 | several targets, `a and b` | — | the clause measures against the bounding box of all of them |
-| target `all` | — | the extent of every node in the scope (comments included, the subject excluded), measured when the statement runs, the same box `query --layout` reports in its header. A subject placed outside it lands on nothing, so nothing is pushed. `below all` is a new lane under everything, left edge level with the drawing's; `right_of all` a new column right of everything, top level with the drawing's. A node named `all` is written `` `all` ``. |
+| a target this edit **deletes** | — | measured at its pre-edit box, so "where the old one was" can be said in the same edit that removes it. It is a target only: it cannot be a subject or be listed by `arrange` / `straighten`, it pins nothing, and it is no obstacle. The box comes from the pre-edit snapshot the pass already takes; this design adds the measured sizes to it. |
+| target `all` | — | the extent of every node in the scope (comments included; the subject and deleted nodes excluded), measured when the statement runs, the same box `query --layout` reports in its header. A subject placed outside it lands on nothing, so nothing is pushed. `below all` is a new lane under everything, left edge level with the drawing's; `right_of all` a new column right of everything, top level with the drawing's. A node named `all` is written `` `all` ``. |
 | `[…] column` / `[…] row` | — | the members, in written order, stacked with lefts aligned (column) or laid side by side with tops aligned (row), with gap `G` (default `normal`). The clauses then position the group's bounding box as one subject. |
 
 **Each axis is stated exactly once.** A lone direction supplies its default
@@ -279,7 +303,7 @@ always computed from the real rendered boxes, so the AI never supplies one.
 | *(no `push`)* | each overlapped node, up **or** down, whichever clears it more cheaply, and anything it then hits. The code chooses per node: a centre above the subject's goes up, below goes down; when hand-placed nodes are near, the options are simulated and the one displacing fewest of them wins. | `cascade`, `Split` or scored (today's Step 5b) |
 | `push down` | every overlapped node **down**, and anything it then hits. Nothing above the subject moves. | `cascade`, `Down` |
 | `push up` | the same, **up** | `cascade`, `Up` |
-| `push right` | **everything** at or right of the subject's left edge (the line snapped by the window rule) shifts right, rigidly, by the least distance that clears what the subject overlaps. What feeds the subject stays. | `shift_half_plane`, fixed = the subject's upstream closure ∪ pinned nodes |
+| `push right` | **everything** at or right of the subject's left edge (the line snapped by the window rule) shifts right, rigidly, by the least distance that clears what the subject overlaps, nodes pinned by earlier statements included (D6). What feeds the subject stays. | `shift_half_plane`, fixed = the subject's upstream closure |
 
 Typical uses:
 
@@ -334,6 +358,7 @@ stays where it is. A `layout.warnings` entry names the line and the problem.
 | a target that is a new node no earlier statement placed (it has no position yet; reorder the lines, or place it first) | `place a right_of b` before `place b at (…)`, `b` new |
 | `at` or `by` together with a clause; `push` twice, or with an unknown direction (`push left`) | |
 | `by` on a node this edit creates (it has no position to offset from) | `place n by (0, 40)` where `n` is new; `n` is placed automatically |
+| a node this edit deletes used as a subject, or listed by `arrange` / `straighten` (it is a valid *target*) | `place hole by (0, 40)` beside `delete hole` |
 | `straight_from S` / `straight_to D` with no wire between them | |
 | a body subject clamped to non-negative coordinates (applied, then reported) | |
 
@@ -348,9 +373,20 @@ repaired in its parent like any other growth.
 |---|---|---|
 | 2 | grown nodes repaired, as today | `grow` |
 | **2½** | **all layout statements, in written order.** A `place`: the subject's box is measured (`rendered_node_size`; a group is stacked first), its position resolved against the drawing *as it stands now*, what it lands on pushed (its `push` direction, else the code's), and the subject **pinned**. An `arrange` / `straighten`: run, its result pushed off what it lands on, and the listed nodes pinned. After the last statement, every named target is pinned too (D6; `all` pins nothing). | `place` (an existing subject), `arrange`, `push` |
-| 3–5 | the remaining added nodes as blocks, as today, with pinned nodes as anchors and fixed obstacles | `auto` |
-| 6 | backward-wire repair, as today, pinned nodes fixed | `auto` |
+| 3–5 | the remaining added nodes as blocks, as today, with pinned nodes as anchors and obstacles no cascade moves | `auto` |
+| 6 | backward-wire repair, as today, with pinned nodes held in its cascades; its shifts stay closure-fixed (D6). It now also covers wires touching a **statement-placed** node (below) | `auto` |
 | 7–8 | comments, as today | `auto` |
+
+**Step 6 and statement-placed nodes.** Today Step 6 skips every wire that
+touches an added node, because Step 4 already anchored that node's block
+against the wire. A node placed by a statement never reaches Step 4, so for
+it nothing would check the wire, and an AI that misjudged a width would leave
+a backward wire behind. Step 6 therefore skips only wires touching nodes
+**placed by Steps 3–5**. A wire touching a statement-placed node is repaired
+like a wire between kept nodes, by the same half-plane shift with
+`fixed = upstream_closure(source)`. The destination side moves and the source
+side stays. When the destination is itself a placed node, it moves with the
+shift, as D6 describes, and the report says so.
 
 Resolving "as it stands now" is what makes relations late-bound. A target
 moved by Step 2, or pushed or arranged by an earlier statement, is measured
@@ -416,7 +452,7 @@ where and how much, so the fix is plain without a picture:
 | `kind` | Reported when |
 |---|---|
 | `overlap` | two boxes overlap after the edit and did not before. Can only involve a pinned node, since everything else is pushed. Example: `"pitch overlaps r (both placed) by 160×20 px"` |
-| `backward_wire` | a wire this edit created runs right-to-left, and Step 6 could not repair it (a cycle, or both ends pinned) |
+| `backward_wire` | a wire this edit created runs right-to-left, and Step 6 could not repair it (a cycle: no shift can put both ends in order) |
 
 Overlaps and backward wires that existed before the edit are baseline, and
 never reported here: both hand-drawn corpora contain overlaps their authors
@@ -483,8 +519,8 @@ during the drag.
 ### B2. Arrange commands
 
 The node context menu gains **Arrange ▸**, enabled for ≥ 2 selected nodes in
-one scope. Each command is one undo step (`MoveNodesCommand`) and sets
-`hand_moved` on the nodes it moves (D12).
+one scope. Each command is one undo step (`MoveNodesCommand`). Like a drag,
+it sets `hand_moved` and clears `ai_placed` on the nodes it moves (D12).
 
 | Command | Effect | Same as the AI's |
 |---|---|---|
@@ -508,7 +544,7 @@ Only selected nodes move, and nothing is pushed (D11).
 | Statements | `text_format/parser.rs`, `network_editor.rs` | `Statement::Place` / `Arrange` / `Straighten` parsed and carried by name path to the layout pass. They are not applied to the network. |
 | Resolution | `layout/placement.rs` (new) | written-order execution, clause resolution, `push` dispatch to `motion.rs`, pinning (subjects per statement, targets at the end) |
 | Pass | `layout/incremental.rs` | Step 2½; a pinned set passed into `fit`, the cascade and Step 6; every primitive's moves recorded with a cause in a `MoveLog` |
-| Ownership tag | GUI creation paths in `structure_designer.rs` (add node, paste/duplicate, insert-on-wire, panel drop, promote/factor/inline) | set `hand_moved` on the created nodes (D12) |
+| Ownership tag | `node_network.rs`, `ai_text_edit.rs`, `end_move_nodes`, `arrange_selected_nodes`, the paste/duplicate copy | `Node::ai_placed` (runtime-only, not serialized): set on nodes an AI edit creates, cleared by a drag or a GUI arrange, not carried by copies (D12) |
 | Report | `ai_edit_log.rs`, `text_format::EditResult` | `MovedNode` gains `cause` / `why`; `EditResult` gains `layout: LayoutReport`; the AI History panel's Layout tab shows the causes |
 | Dry run | `ai_text_edit.rs` | apply → capture → `TextEditNetworkCommand::undo` → drop |
 | API | `rust/src/api/structure_designer/ai_assistant_api.rs` | `ai_edit_network(code, replace, dry_run)`, `ai_query_layout(scope, nodes, box)`, `ai_check_layout()`; `arrange_selected_nodes(op)` for B2. FRB regen. |
@@ -546,9 +582,12 @@ later, not guessed now.
   predecessor and push right.
 - **Preview.** `--dry-run` returns the full result, `layout` included, and
   changes nothing.
-- **Respect ownership.** Never place, arrange or straighten a node tagged
-  `hand` unless asked (D3). The tag marks the user's nodes, whatever this
+- **Respect ownership.** Place, arrange or straighten only nodes tagged `ai`
+  unless asked (D3). An untagged node is the user's, whatever this
   conversation remembers.
+- **Position, then delete, in one edit.** A node the edit deletes can still be
+  a target at its old box (`place r left_even_with hole_r` beside
+  `delete hole_r`).
 
 ---
 
@@ -575,9 +614,11 @@ r     = range { start: 0, step: 1, count: n }
 holes = map { xs: r, input_type: Int, output_type: Geometry, body { … } }
 holes_u = union { shapes: holes }
 cut     = diff { base: slab, sub: holes_u }
+delete hole
+delete hole_r
 
 place [n, pitch] column below d push down      # into the column; the note makes way
-place r below all, left_even_with hole_r        # a lane under everything, lined up with the old one
+place r below all, left_even_with hole_r        # a lane under everything, where the old one was
 place holes   right_of r,     straight_from r   # attach: holes' width is unknown
 place holes_u right_of holes, straight_from holes
 ```
@@ -586,9 +627,11 @@ place holes_u right_of holes, straight_from holes
 The `push down` of the note is the one the AI chose. `below all` is measured
 after that push, so `r` lands under the note's new position (bottom 630) at
 `y = 660`, not under the old extent: an `at` computed from the query would
-have been stale. The `auto` shift of
-`cut` and `fill` it did not foresee: the `map` renders 370 px wide, so the
-safety net shifted the top chain to keep `holes_u → cut.sub` forward. The
+have been stale. `hole_r` is deleted by the same edit and is still measured
+at its old box, so `r` lands at `x = 310`. The `auto` shift of `cut` and
+`fill` it did not foresee: the `map` renders 370 px wide, so Step 6 shifted
+the top chain to keep `holes_u → cut.sub` forward. `holes_u` is
+statement-placed, so that wire is one Step 6 now covers. The
 AI commits and tells the user both. The user then drags the note beside `h`
 (a guide snaps it level with `h`) and straightens the chain from the Arrange
 menu. The next query reports `column w, h, d, n, pitch`, and the next edit's
@@ -646,12 +689,14 @@ removes a parameter that other networks call.
 ### Phase 4: Ask (A1)
 
 `layout/readout.rs`, `ai_query_layout`, `/layout`, and the CLI flags.
-`hand_moved` set on every GUI creation path (D12), inside each path's
-existing undo command.
+`Node::ai_placed` (D12): set by `ai_text_edit` on the nodes it creates,
+cleared by `end_move_nodes` and the Arrange commands, dropped by the
+paste/duplicate copy, and absent from serialization.
 
-*Tests:* every GUI creation path listed in D12 sets `hand_moved`, and its undo
-removes the node along with the flag; an AI edit's new nodes never have it;
-snapshot tests of the read-out on demolib networks (every filter,
+*Tests:* an AI edit's new nodes carry `ai_placed` and its pre-existing nodes
+do not; a drag and a GUI arrange clear it; a pasted or duplicated copy of an
+AI node lacks it; a save/load round trip drops it and leaves the `.cnnd`
+byte-identical; no GUI creation path sets `hand_moved`; snapshot tests of the read-out on demolib networks (every filter,
 a body scope); group detection on hand-drawn columns, including a column cut
 by the box edge; an unknown name in `--nodes`.
 
@@ -681,8 +726,14 @@ ended); `all` (measured after an earlier statement's push, excludes an
 existing subject, pushes nothing, pins nothing, scoped to a body inside
 one, and `` `all` `` still names a node); written order (`straighten [a, b]` then `place c below b` puts `c`
 under the straightened `b`; swapping the two lines gives the other result);
-pinning (no later step moves a placed node, and an automatic placement that
-would cascade a `place` target pushes something else instead); body statements
+pinning (no later cascade moves a placed node, and an automatic placement that
+would cascade a `place` target pushes something else instead; a later
+half-plane shift carries a pinned node with its side and never turns a wire
+into it backward, the case that pinning-as-`fixed` would break); Step 6 on a
+wire out of a statement-placed node (a subject placed too far right of its
+consumer: the consumer side shifts, `cause: auto`); a deleted target
+(measured at its pre-edit box, excluded from `all`, rejected as a subject);
+body statements
 (clamping, growth reaches the parent); `--replace` with statements. The
 corpus test gains a generated edit kind that places its new nodes `below`
 an existing node, so the oracle runs over pushes off pinned nodes.
