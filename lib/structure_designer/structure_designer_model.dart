@@ -62,6 +62,7 @@ import 'package:flutter_cad/structure_designer/network_thumbnails.dart';
 import 'package:flutter_cad/structure_designer/node_network/node_network_painter.dart'
     show WireHitResult;
 import 'package:flutter_cad/structure_designer/node_network/splice_drop_memo.dart';
+import 'package:flutter_cad/structure_designer/node_network/wire_move.dart';
 import 'package:flutter_cad/structure_designer/namespace_utils.dart' as ns
     show mountFor;
 
@@ -472,6 +473,22 @@ class StructureDesignerModel extends ChangeNotifier {
   /// pointer tick, so the open-port `+` tab layer (`open_port_tabs.dart`)
   /// rebuilds on those two edges alone — the drag fast path stays intact.
   final ValueNotifier<PinReference?> wireDragSource = ValueNotifier(null);
+
+  /// Not null while the wires of a pin are being moved
+  /// (`doc/design_move_wires.md`). A separate drag state from [draggedWire],
+  /// which stays null meanwhile: so the open-port tabs stay hidden and the
+  /// source pin's `onDragEnd` opens no Add Node popup.
+  WireMove? get wireMove => _wireMove;
+  WireMove? _wireMove;
+
+  /// Asks Rust whether the held wires may drop on a pin, once per pin per
+  /// move drag. Created by [beginWireMove], dropped with the move.
+  PerDragPlanMemo<PinReference>? _wireMoveMemo;
+
+  /// Registered by the node network editor: give the canvas keyboard focus,
+  /// so the Escape of a move drag reaches its key handler. `Draggable` may
+  /// beat the canvas's own tap-down focus grab in the gesture arena.
+  VoidCallback? onRequestCanvasFocus;
 
   /// The declared input whose name field the property panel focuses on its
   /// next build — set by an open-port drop ([addInputFromWire]) and taken by
@@ -2074,6 +2091,111 @@ class StructureDesignerModel extends ChangeNotifier {
       draggedWire = null;
       dragRepaint.value++;
     }
+  }
+
+  // ----- Moving wires between pins (`doc/design_move_wires.md`) -----
+
+  /// The wires a pick-up of [pin] would hold, each with the end that stays
+  /// put. Empty for an unconnected pin.
+  List<APIWireEnd> pinWires(PinReference pin) =>
+      structure_designer_api.pinWires(pin: pinAddressOf(pin));
+
+  /// Start a move drag of [ends], the wires of [from] ([pinWires]), with the
+  /// pointer at [cursor] (canvas-local). Returns false, and starts nothing,
+  /// on a read-only network or when there is nothing to hold — the drag is
+  /// then an ordinary wire drag, which is inert on a read-only network too.
+  bool beginWireMove(PinReference from, List<APIWireEnd> ends, Offset cursor) {
+    if (activeNetworkReadOnly || ends.isEmpty) return false;
+    final fromAddress = pinAddressOf(from);
+    _wireMove = WireMove(from: from, ends: ends, cursor: cursor);
+    _wireMoveMemo = PerDragPlanMemo<PinReference>(
+      (target) =>
+          structure_designer_api.moveWiresRefusal(
+              from: fromAddress, to: pinAddressOf(target)) ==
+          null,
+      pinKey,
+    );
+    onRequestCanvasFocus?.call();
+    dragRepaint.value++;
+    return true;
+  }
+
+  /// Move the pointer of the move drag. Same fast path as [dragWire]: the
+  /// rubber bands are painted only by the overlay painter.
+  void updateWireMove(Offset cursor) {
+    final move = _wireMove;
+    if (move == null) return;
+    move.cursor = cursor;
+    dragRepaint.value++;
+  }
+
+  /// Escape during a move drag: the held wires are drawn again, no pin
+  /// accepts, and the release does nothing (D7). Returns whether a move was
+  /// on to cancel.
+  bool cancelWireMove() {
+    final move = _wireMove;
+    if (move == null || move.cancelled) return false;
+    move.cancelled = true;
+    move.hoveredTarget = null;
+    dragRepaint.value++;
+    return true;
+  }
+
+  /// Whether the held wires may drop on [target]. False once the move is
+  /// cancelled, so no target takes the drop.
+  bool canMoveWiresTo(PinReference target) {
+    final move = _wireMove;
+    final memo = _wireMoveMemo;
+    if (move == null || move.cancelled || memo == null) return false;
+    return memo.accepts(target);
+  }
+
+  /// The pointer entered ([accepted] true) or left ([accepted] false) the
+  /// drop target [target]. An accepting **output** under a move held by its
+  /// input end (D16) is recorded, so the painters draw the wire as it will
+  /// be; anything else clears it.
+  void setWireMoveHover(PinReference target, {required bool accepted}) {
+    final move = _wireMove;
+    if (move == null) return;
+    final PinReference? next;
+    if (accepted && target.isOutput && move.from.isInput) {
+      next = target;
+    } else if (!accepted && move.hoveredTarget == target) {
+      next = null;
+    } else {
+      return;
+    }
+    if (move.hoveredTarget == next) return;
+    move.hoveredTarget = next;
+    dragRepaint.value++;
+  }
+
+  /// The move drag ended without a drop (empty space, an invalid target,
+  /// after Escape). Nothing changes.
+  void endWireMove() {
+    if (_wireMove == null) return;
+    _wireMove = null;
+    _wireMoveMemo = null;
+    dragRepaint.value++;
+  }
+
+  /// The move drag was released on [target]: move the held wires there, as
+  /// one undo step. Does nothing after Escape. The gesture's one full notify
+  /// is the refresh here.
+  void moveWires(PinReference target) {
+    final move = _wireMove;
+    _wireMove = null;
+    _wireMoveMemo = null;
+    if (move == null || move.cancelled || activeNetworkReadOnly) {
+      dragRepaint.value++;
+      return;
+    }
+    final refusal = structure_designer_api.moveWires(
+        from: pinAddressOf(move.from), to: pinAddressOf(target));
+    // A refusal changes nothing: the target accepted on the plan, so it is
+    // reachable only through a network that changed mid-drag.
+    if (refusal != null) debugPrint('moveWires refused: $refusal');
+    refreshFromKernel();
   }
 
   /// Update the anchor rubber band during a drag off a comment's anchor
@@ -5237,6 +5359,9 @@ class StructureDesignerModel extends ChangeNotifier {
     _draggedNodeIds.clear();
     _endSpliceDrag();
     _userTypeDropWire = null;
+    // A move drag survives a refresh from elsewhere, but its plans were made
+    // against the old network: ask again.
+    _wireMoveMemo?.endDrag();
     nodeNetworkView = structure_designer_api.getNodeNetworkView();
     nodeNetworkNames =
         structure_designer_api.getNodeNetworksWithValidation() ?? [];

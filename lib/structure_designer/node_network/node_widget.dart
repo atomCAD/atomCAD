@@ -27,6 +27,7 @@ import 'package:flutter_cad/structure_designer/node_network/node_name_path.dart'
 import 'package:flutter_cad/structure_designer/network_thumbnails.dart';
 import 'package:flutter_cad/structure_designer/node_network/node_title.dart';
 import 'package:flutter_cad/structure_designer/node_network/scope_resolver.dart';
+import 'package:flutter_cad/structure_designer/node_network/wire_drag_mode.dart';
 import 'package:flutter_cad/structure_designer/namespace_utils.dart';
 import 'package:flutter_cad/structure_designer/find_usages_menu.dart';
 import 'package:flutter_cad/structure_designer/root_cause_navigation.dart';
@@ -758,6 +759,31 @@ class PinWidget extends StatelessWidget {
     return result;
   }
 
+  /// A drag off this pin started: decide whether it draws a new wire or
+  /// moves the pin's wires (`doc/design_move_wires.md`, [wireDragMode]).
+  /// Ctrl is read once, here. A new-wire drag needs nothing more — its first
+  /// `onDragUpdate` starts the rubber band.
+  void _startDrag(BuildContext context) {
+    final model = Provider.of<StructureDesignerModel>(context, listen: false);
+    if (model.activeNetworkReadOnly) return;
+    final ends = model.pinWires(pinReference);
+    final mode = wireDragMode(
+      isOutput: pinReference.isOutput,
+      multi: multi,
+      wireCount: ends.length,
+      ctrl: HardwareKeyboard.instance.isControlPressed,
+    );
+    if (mode != WireDragMode.move) return;
+    // The rubber bands need a cursor before the first pointer move: start
+    // them at this pin's centre.
+    final nodeNetworkBox = _findNodeNetworkRenderBox(context);
+    final pinBox = context.findRenderObject() as RenderBox?;
+    if (nodeNetworkBox == null || pinBox == null) return;
+    final cursor = nodeNetworkBox
+        .globalToLocal(pinBox.localToGlobal(pinBox.size.center(Offset.zero)));
+    model.beginWireMove(pinReference, ends, cursor);
+  }
+
   @override
   Widget build(BuildContext context) {
     final bool isInput = pinReference.isInput;
@@ -803,18 +829,31 @@ class PinWidget extends StatelessWidget {
                     extraTooltipLine: extraTooltipLine),
               ),
             ),
+            onDragStarted: () => _startDrag(context),
             onDragUpdate: (details) {
               final nodeNetworkBox = _findNodeNetworkRenderBox(context);
               if (nodeNetworkBox != null) {
                 final position =
                     nodeNetworkBox.globalToLocal(details.globalPosition);
-                Provider.of<StructureDesignerModel>(context, listen: false)
-                    .dragWire(pinReference, position);
+                final model =
+                    Provider.of<StructureDesignerModel>(context, listen: false);
+                if (model.wireMove != null) {
+                  model.updateWireMove(position);
+                } else {
+                  model.dragWire(pinReference, position);
+                }
               }
             },
             onDragEnd: (details) {
               final model =
                   Provider.of<StructureDesignerModel>(context, listen: false);
+              // A move drag that reached here was not dropped on a pin that
+              // took it: it changes nothing, and opens no Add Node popup
+              // (D7). A drop already cleared it in `moveWires`.
+              if (model.wireMove != null) {
+                model.endWireMove();
+                return;
+              }
               // Store the drag info before clearing
               final dragInfo = model.draggedWire;
               if (dragInfo != null) {
@@ -829,13 +868,27 @@ class PinWidget extends StatelessWidget {
           );
         },
         onWillAcceptWithDetails: (details) {
-          return Provider.of<StructureDesignerModel>(context, listen: false)
-              .canConnectPins(details.data, pinReference);
+          final model =
+              Provider.of<StructureDesignerModel>(context, listen: false);
+          if (model.wireMove != null) {
+            final accepted = model.canMoveWiresTo(pinReference);
+            model.setWireMoveHover(pinReference, accepted: accepted);
+            return accepted;
+          }
+          return model.canConnectPins(details.data, pinReference);
+        },
+        onLeave: (_) {
+          Provider.of<StructureDesignerModel>(context, listen: false)
+              .setWireMoveHover(pinReference, accepted: false);
         },
         onAcceptWithDetails: (details) {
-          //print("Connected pin ${details.data} to pin $pinReference");
-          Provider.of<StructureDesignerModel>(context, listen: false)
-              .connectPins(details.data, pinReference);
+          final model =
+              Provider.of<StructureDesignerModel>(context, listen: false);
+          if (model.wireMove != null) {
+            model.moveWires(pinReference);
+            return;
+          }
+          model.connectPins(details.data, pinReference);
         },
       ),
     );

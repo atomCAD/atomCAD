@@ -162,7 +162,9 @@ class _StructureDesignerState extends State<StructureDesigner> {
   /// the node-job poll (background node jobs D11).
   bool _flutterInteractionOpen() {
     if (_pointersDown > 0) return true;
-    if (graphModel.draggedWire != null) return true;
+    if (graphModel.draggedWire != null || graphModel.wireMove != null) {
+      return true;
+    }
     // A tab switch is on its way; the incoming document is checked as part
     // of its activation.
     if (graphModel.isSwitchingDocument) return true;

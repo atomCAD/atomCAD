@@ -540,6 +540,12 @@ class NodeNetworkState extends State<NodeNetwork> {
     // Register scroll-to-node callback for click-to-activate
     widget.graphModel.onScrollToNode = _scrollToNode;
     widget.graphModel.onNodeDroppedOnWire = _spliceDroppedNode;
+    widget.graphModel.onRequestCanvasFocus = _requestCanvasFocus;
+  }
+
+  /// [StructureDesignerModel.onRequestCanvasFocus]: a move drag started.
+  void _requestCanvasFocus() {
+    if (mounted) focusNode.requestFocus();
   }
 
   @override
@@ -555,6 +561,9 @@ class NodeNetworkState extends State<NodeNetwork> {
     }
     if (widget.graphModel.onScrollToNode == _scrollToNode) {
       widget.graphModel.onScrollToNode = null;
+    }
+    if (widget.graphModel.onRequestCanvasFocus == _requestCanvasFocus) {
+      widget.graphModel.onRequestCanvasFocus = null;
     }
     if (widget.graphModel.onNodeDroppedOnWire == _spliceDroppedNode) {
       widget.graphModel.onNodeDroppedOnWire = null;
@@ -1995,6 +2004,13 @@ class NodeNetworkState extends State<NodeNetwork> {
               // the risk of triggering platform-specific HardwareKeyboard inconsistencies.
               if (event is! KeyDownEvent) {
                 return KeyEventResult.ignored;
+              }
+
+              // Escape during a move drag cancels it, ahead of every other
+              // use of Escape (`doc/design_move_wires.md`).
+              if (event.logicalKey == LogicalKeyboardKey.escape &&
+                  model.cancelWireMove()) {
+                return KeyEventResult.handled;
               }
 
               //print("node_network.dart event.logicalKey: " +

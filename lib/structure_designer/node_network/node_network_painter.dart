@@ -8,6 +8,7 @@ import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 
 import 'package:flutter_cad/structure_designer/node_network/node_network.dart';
 import 'package:flutter_cad/structure_designer/node_network/scope_resolver.dart';
+import 'package:flutter_cad/structure_designer/node_network/wire_move.dart';
 
 // Dash patterns for wires carrying unaligned Blueprint/Crystal values.
 // Long-dash for motif-unaligned (softer warning), short-dash for lattice-unaligned
@@ -75,11 +76,16 @@ class WireHitResult {
       wire.destParamIndex);
 
   static String _key(List<BigInt> scopeChain, BigInt sourceNodeId,
-      BigInt destNodeId, APIArgumentKind kind, BigInt destParamIndex) {
-    final storage = _storageScope(scopeChain, kind);
-    return '${storage.join('/')}|$sourceNodeId|$destNodeId|'
-        '${kind.name}|$destParamIndex';
-  }
+          BigInt destNodeId, APIArgumentKind kind, BigInt destParamIndex) =>
+      storageKey(_storageScope(scopeChain, kind), sourceNodeId, destNodeId,
+          kind, destParamIndex);
+
+  /// [key] of a wire addressed by its *storage* scope, as Rust addresses it
+  /// (a held wire of the move drag, `wire_move.dart`'s `heldWireKey`).
+  static String storageKey(List<BigInt> storageScope, BigInt sourceNodeId,
+          BigInt destNodeId, APIArgumentKind kind, BigInt destParamIndex) =>
+      '${storageScope.join('/')}|$sourceNodeId|$destNodeId|'
+      '${kind.name}|$destParamIndex';
 
   static List<BigInt> _storageScope(
           List<BigInt> scopeChain, APIArgumentKind kind) =>
@@ -201,6 +207,15 @@ class NodeNetworkPainter extends CustomPainter {
   /// or null. Hover is interaction, so the image export never draws it.
   String? get _hoveredWireKey =>
       hideSelection ? null : graphModel.canvasHover.value?.wireKey;
+
+  /// The keys of the wires a move drag holds (`wire_move.dart`): the painters
+  /// skip them and draw the drag's rubber bands instead. Empty when no move
+  /// is on, once it is cancelled, and in the image export.
+  Set<String> get _heldWireKeys {
+    final move = graphModel.wireMove;
+    if (hideSelection || move == null || move.cancelled) return const {};
+    return move.heldKeys;
+  }
 
   /// Whether [wire], listed under [scopeChain], is the hovered one.
   static bool _isHovered(
@@ -348,6 +363,17 @@ class NodeNetworkPainter extends CustomPainter {
     // The wire a dragged node would be spliced into, above everything so it
     // stays visible under the node being dragged.
     if (spliceTarget != null) _drawSpliceTarget(spliceTarget, canvas);
+
+    // The rubber bands of a move drag, on top of body wires like the
+    // dragged wire below.
+    final move = graphModel.wireMove;
+    if (move != null && !hideSelection) {
+      for (final segment
+          in wireMoveSegments(move, resolver.tryPinScreenPosition)) {
+        _drawWire(segment.source, segment.dest, canvas, paint, segment.dataType,
+            false, null);
+      }
+    }
 
     // Draw dragged wire on top of body wires.
     if (graphModel.draggedWire != null) {
@@ -563,7 +589,12 @@ class NodeNetworkPainter extends CustomPainter {
     canvas.save();
     canvas.clipRect(clipRect, clipOp: ClipOp.difference);
     final hoveredKey = _hoveredWireKey;
+    final heldKeys = _heldWireKeys;
     for (final c in crossing) {
+      if (heldKeys.isNotEmpty &&
+          heldKeys.contains(WireHitResult.keyOf(c.scopeChain, c.wire))) {
+        continue;
+      }
       // Alignment dashes are top-level-only (see _drawWiresAtScope); body
       // captures render solid.
       _drawWire(c.sourcePos, c.destPos, canvas, paint, c.dataType,
@@ -724,7 +755,12 @@ class NodeNetworkPainter extends CustomPainter {
     Paint paint,
   ) {
     final hoveredKey = _hoveredWireKey;
+    final heldKeys = _heldWireKeys;
     for (var wire in wires) {
+      if (heldKeys.isNotEmpty &&
+          heldKeys.contains(WireHitResult.keyOf(scopeChain, wire))) {
+        continue;
+      }
       final source =
           resolver.tryPinScreenPosition(_wireSourcePin(wire, scopeChain));
       final dest =
