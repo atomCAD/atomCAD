@@ -1,6 +1,7 @@
 # Design: deliberate node placement
 
-**Status:** draft for review.
+**Status:** reviewed; ready for implementation, phase by phase (see
+[Phases](#phases)).
 
 **Background:** `reports/relational_layout_assessment_2026-10-26.md` (why
 not reladraw-style persisted relations), `reports/relational_layout_proposal_2026-10-26.md`
@@ -58,9 +59,9 @@ relation: `below all` / `right_of all` measure against the whole drawing as
 it stands. The AI may also write an absolute position, for anchoring a group
 at a specific free spot. Offsets already make every position reachable, so
 withholding absolute positions would buy no safety. The rule taught to the AI
-is **anchor to the drawing or absolutely, attach relatively**. Moving an existing node is the
-third case. "40 px down" is relative to the node's own position, so that
-form (`by`) is late-bound too: it is measured from where the node stands when
+is **anchor to the drawing or absolutely, attach relatively**. Moving an
+existing node is the third case. "40 px down" is relative to the node's own
+position, so that form (`by`) is late-bound too: it is measured from where the node stands when
 the statement runs, not from where a query saw it.
 
 **D3. The AI owns the nodes it creates.** It places those freely. It moves,
@@ -83,7 +84,8 @@ today. If the AI's statements are complete,
 the net catches nothing. There is no "manual" mode: it would only add the
 ability to leave a broken drawing.
 
-**D6. Statements run in written order, and what they relate to stays put.**
+**D6. Statements run in written order, and what they place or relate to is
+pinned.**
 The layout statements form a small sequential program. Each one sees the
 drawing as the earlier ones left it, so the AI can reason about its script
 line by line. To **pin** a node is to hold it in every later **cascade**: no
@@ -105,14 +107,14 @@ line. Pinning happens at two points:
   follow. The pseudo-target `all` pins nothing; otherwise one `below all`
   would freeze the whole drawing.
 
-What survives the end of the edit is therefore precise. A **vertical**
-relation (`below`, `top_even_with`, `straight_from`, …) holds exactly, because
-only cascades move nodes vertically and they never move a pinned node. A
-**horizontal** relation holds exactly when both ends are on the same side of
-every later shift line. When a shift line falls between them, the gap widens by
-the shift and order is kept. Such a move is reported like any other (`auto`,
-with the shift's cause), so the AI sees it. Nothing ever reverses a relation
-or narrows a gap.
+What survives from the last statement to the end of the edit is therefore
+precise. A **vertical** relation (`below`, `top_even_with`, `straight_from`,
+…) holds exactly. After the statements, only cascades and the comment steps
+move nodes vertically, and neither moves a pinned node. A **horizontal**
+relation holds exactly when both ends are on the same side of every later
+shift line. When a shift line falls between them, the gap widens by the shift
+and order is kept. Such a move is reported with its cause like any other, so
+the AI sees it. No automatic step ever reverses a relation or narrows a gap.
 
 Between statements, a target is not pinned. A later statement may push an
 earlier one's target, but that is the AI's own program doing it, visible in
@@ -181,8 +183,10 @@ stored in: logical canvas pixels, x to the right, y **down**. A node's
 position is its **top-left corner**. Its box is its rendered footprint
 (`layout::size::rendered_node_size`, the one size function, pinned to
 Flutter's by the parity fixture). A node inside a HOF body has body
-coordinates, with the origin at the body's top-left. All numbers are
-reported and accepted as whole pixels.
+coordinates, with the origin at the body's top-left. Statements accept whole
+pixels, and the read-out and the report print whole pixels, rounded. Stored
+positions can be fractional (a hand-drawn file is), so a printed position can
+be up to 0.5 px off the stored one.
 
 ### A1. Ask: `query --layout`
 
@@ -241,8 +245,9 @@ primitives agree on what a column is.
 Three new statement kinds, alongside `output` and `delete`, written anywhere
 in an edit script. Their order **among themselves** is their execution order
 (D6). Their position relative to node definitions does not matter: every
-statement runs after the whole network change is applied. A body's statements go inside its `body { … }` block, or
-path-addressed (`place m1/x below m1/d`).
+statement runs after the whole network change is applied. A body's
+statements go inside its `body { … }` block, or are path-addressed
+(`place m1/x below m1/d`).
 
 ```
 place      <subject> at (<x>, <y>)          [push <dir>]
@@ -292,7 +297,7 @@ follows the first token, so a node named `place` stays legal (`place = int { …
 | `gap: G` | — | replaces the direction's default `normal` gap |
 | `dx: n`, `dy: n` | — | shifts the clause's result by a fixed offset; any position near a target is reachable |
 | several targets, `a and b` | — | the clause measures against the bounding box of all of them |
-| a target this edit **deletes** | — | measured at its pre-edit box, so "where the old one was" can be said in the same edit that removes it. It is a target only: it cannot be a subject or be listed by `arrange` / `straighten`, it pins nothing, and it is no obstacle. The box comes from the pre-edit snapshot the pass already takes; this design adds the measured sizes to it. |
+| a target this edit **deletes** | — | measured at its pre-edit box, so "where the old one was" can be said in the same edit that removes it. It is a target only: it cannot be a subject or be listed by `arrange` / `straighten`, it pins nothing, and it is no obstacle. The box comes from the pre-edit `PositionSnapshot` the pass already takes, which records each node's position and footprint. |
 | target `all` | — | the extent of every node in the scope (comments included; the subject and deleted nodes excluded), measured when the statement runs, the same box `query --layout` reports in its header. A subject placed outside it lands on nothing, so nothing is pushed. `below all` is a new lane under everything, left edge level with the drawing's; `right_of all` a new column right of everything, top level with the drawing's. A node named `all` is written `` `all` ``. |
 | `[…] column` / `[…] row` | — | the members, in written order, stacked with lefts aligned (column) or laid side by side with tops aligned (row), with gap `G` (default `normal`). The clauses then position the group's bounding box as one subject. |
 
@@ -302,17 +307,17 @@ two explicit clauses on one axis are an error.
 
 #### `push`: which way the nodes it lands on go
 
-A placed subject never moves (D6), so when it lands on existing nodes,
+A placed subject never yields (D6), so when it lands on existing nodes,
 **they** are pushed out of the way. That always happens. The optional
 `push <dir>` at the end of a statement says which way. The distance is
 always computed from the real rendered boxes, so the AI never supplies one.
 
 | | What moves | Primitive |
 |---|---|---|
-| *(no `push`)* | each overlapped node, up **or** down, whichever clears it more cheaply, and anything it then hits. The code chooses per node: a centre above the subject's goes up, below goes down; when hand-placed nodes are near, the options are simulated and the one displacing fewest of them wins. | `cascade`, `Split` or scored (today's Step 5b) |
+| *(no `push`)* | each overlapped node, up **or** down, whichever clears it more cheaply, and anything it then hits. The code chooses per node: a centre above the subject's goes up, below goes down; when the scope holds `hand_moved` nodes, the options are simulated and the one displacing fewest of them wins. | `cascade`, `Split` or scored (today's Step 5b) |
 | `push down` | every overlapped node **down**, and anything it then hits. Nothing above the subject moves. | `cascade`, `Down` |
 | `push up` | the same, **up** | `cascade`, `Up` |
-| `push right` | **everything** at or right of the subject's left edge (the line snapped by the window rule) shifts right, rigidly, by the least distance that clears what the subject overlaps, nodes pinned by earlier statements included (D6). What feeds the subject stays. | `shift_half_plane`, fixed = the subject's upstream closure |
+| `push right` | **everything** at or right of the subject's left edge (the line snapped by the window rule) shifts right, rigidly, by the least distance that clears what the subject overlaps, nodes pinned by earlier statements included (D6). What feeds the subject stays. A node the shift cannot clear stays where it is: a fixed node, or a node straddling the line when the window rule's snap gives up. That node is then cascaded off as in the no-`push` row. | `shift_half_plane`, fixed = the subject's upstream closure |
 
 Typical uses:
 
@@ -371,7 +376,10 @@ Grammar errors are not in this table. `at` or `by` together with a clause,
 | `by` on a node this edit creates (it has no position to offset from) | `place n by (0, 40)` where `n` is new; `n` is placed automatically |
 | a node this edit deletes used as a subject, or listed by `arrange` / `straighten` (it is a valid *target*) | `place hole by (0, 40)` beside `delete hole` |
 | `straight_from S` / `straight_to D` with no wire between them | |
-| a body subject clamped to non-negative coordinates (applied, then reported) | |
+
+One case is applied rather than dropped. A body subject that resolves to a
+negative coordinate is clamped to 0 on that axis, and a warning reports the
+clamp.
 
 ### Where statements run
 
@@ -386,7 +394,7 @@ repaired in its parent like any other growth.
 | **2½** | **all layout statements, in written order.** A `place`: the subject's box is measured (`rendered_node_size`; a group is stacked first), its position resolved against the drawing *as it stands now*, what it lands on pushed (its `push` direction, else the code's), and the subject **pinned**. An `arrange` / `straighten`: run, its result pushed off what it lands on, and the listed nodes pinned. After the last statement, every named target is pinned too (D6; `all` pins nothing). | `place` (an existing subject), `arrange`, `push` |
 | 3–5 | the remaining added nodes as blocks, as today, with pinned nodes as anchors and obstacles no cascade moves | `auto` |
 | 6 | backward-wire repair, as today, with pinned nodes held in its cascades; its shifts stay closure-fixed (D6). It now also covers wires touching a **statement-placed** node (below) | `auto` |
-| 7–8 | comments, as today | `auto` |
+| 7–8 | comments, as today. Step 7's commit holds pinned nodes like any cascade, and Step 8 never pulls back a pinned comment | `auto` |
 
 **Step 6 and statement-placed nodes.** Today Step 6 skips every wire that
 touches an added node, because Step 4 already anchored that node's block
@@ -410,7 +418,8 @@ The edit result (the JSON `atomcad-cli edit` prints) gains a
 `layout` object when there is something to say: an existing node moved, a
 finding or warning arose, or the edit contained layout statements. Otherwise
 the key is absent, so an edit that leaves the drawing alone says nothing about
-layout, and the agent has nothing to relay. A `--dry-run` always includes it.
+layout, and the agent has nothing to relay. A `--dry-run` follows the same
+rule.
 
 ```json
 "layout": {
@@ -426,7 +435,7 @@ layout, and the agent has nothing to relay. A `--dry-run` always includes it.
   ],
   "moved": [
     { "node": "note", "from": [100, 370], "to": [100, 550], "cause": "push",
-      "dir": "down", "why": "line 18: place [n, pitch] column below d push down" },
+      "dir": "down", "why": "line 10: place [n, pitch] column below d push down" },
     { "node": "cut",  "from": [730, 100], "to": [1150, 100], "cause": "auto",
       "why": "keeps wire holes_u -> cut.sub forward" },
     { "node": "fill", "from": [940, 100], "to": [1360, 100], "cause": "auto",
@@ -439,9 +448,10 @@ layout, and the agent has nothing to relay. A `--dry-run` always includes it.
 
 | Field | Content |
 |---|---|
-| `placed` | every node a `place` statement positioned, with its **final box**. The AI learns the real size of what it created (above: how wide the `map` renders) without querying again. |
+| `placed` | every node a `place` statement positioned, new or existing, with its **final box**. The AI learns the real size of what it created (above: how wide the `map` renders) without querying again. An existing subject is also in `moved`, with cause `place`. |
 | `auto_placed` | every new node the incremental rules positioned, with its final box |
-| `moved` | every **existing** node whose position changed, with `from` / `to` and the cause of its *first* move (later moves by other causes are folded into `to`, and listed as `also`) |
+| `moved` | every **existing** node whose position changed, with `from` / `to`, the `cause` of its *first* move, and `why`. When later moves had other causes, `to` includes them and an `also` list names those causes in order. The key is omitted when there are none. |
+| `why` | for a statement cause, `"line N: <statement>"`. For `grow` / `auto`, a short reason naming the node or wire it served. Meant for the AI to read, not to parse. |
 | `findings` | what this edit **created** and nothing repaired (below) |
 | `warnings` | rejected statements: `{ "line", "statement", "problem", "fallback" }` |
 
@@ -594,7 +604,8 @@ new way of putting them there, because the incremental pass already has one.
 - **Causes are recorded at the call sites, not inside the primitives.**
   `cascade` already returns the ids it moved and `shift_half_plane` its
   `ShiftOutcome`. The pass records `(scope, id) → cause` from those return
-  values, keeping the first cause per node. `from` / `to` still come from the
+  values, keeping every cause per node in order: the first becomes `cause`,
+  and later different ones become `also`. `from` / `to` still come from the
   one before/after diff that `IncrementalOutcome.moved` already computes, so a
   reported move and an actual move cannot disagree by construction. The only
   thing left to test is that every diffed node found a cause.
@@ -627,8 +638,8 @@ later, not guessed now.
   `push`, what you land on goes up or down, wherever the code finds cheapest.
   There is no `push left`: to make room before `T`, place after its
   predecessor and push right.
-- **Preview.** `--dry-run` returns the full result, `layout` included, and
-  changes nothing.
+- **Preview.** `--dry-run` returns exactly the result the edit would return,
+  and changes nothing.
 - **Respect ownership.** Place, arrange or straighten only nodes tagged `ai`
   unless asked (D3). An untagged node is the user's, whatever this
   conversation remembers.
@@ -694,11 +705,15 @@ with no account of why.
 
 ## Phases
 
-Parts A and B are independent and can run in parallel. Every phase updates
-the reference guide (`doc/reference_guide/node_networks.md` /
-`ui.md` for B, the text format pages and the skill's
-`references/text-format.md` for A) and `layout/AGENTS.md` where it adds a
-module.
+Implement the phases in order. Phase 1 depends on nothing and can run in
+parallel with the others. Phase 2's `arrange.rs` is needed by Phase 4 (Arrange
+clears `ai_placed`) and by Phase 5 (groups, `arrange`, `straighten`). Every
+phase updates the reference guide (`doc/reference_guide/node_networks.md` /
+`ui.md` for B, the text format pages for A), and `layout/AGENTS.md` where it
+adds a module. Each Part A phase adds its own channel to the skill
+(`.claude/skills/atomcad/`, including `references/text-format.md`): Phase 3
+the report, Phase 4 the read-out, Phase 5 the statements. Each adds
+vocabulary only (see [What the skill teaches](#what-the-skill-teaches)).
 
 ### Phase 1: Snapping guides (B1)
 
@@ -729,9 +744,25 @@ generated edit, that every node in the report's `moved` list carries a cause
 (its from/to are the diff by construction), and that `layout` is absent
 exactly when no existing node moved, no finding or warning arose, and the
 edit had no layout statements. Findings fixtures: a new overlap
-is reported, a pre-existing one is not. Dry run: the network, undo stack,
+is reported and a pre-existing one is not; a backward wire this edit created
+inside a cycle is reported. Dry run: the network, undo stack,
 dirty flag and AI log are bit-identical afterwards, including when the edit
 removes a parameter that other networks call.
+
+The oracle learns about findings here. Invariant 1 ("no new overlap") becomes
+"**the new overlaps are exactly the reported `overlap` findings**", checked
+in both directions. Every new overlapping pair must be in the findings, and
+every finding must be a pair that overlaps after the edit and did not before.
+An edit without statements must still report none, so the invariant is
+unchanged for every test that exists today. The oracle computes overlaps
+itself, from rendered boxes, and never calls the production findings code.
+It stays an independent judge.
+
+The corpus run gains **dry-run equivalence**. Every generated edit is first
+run with `--dry-run`, then for real, on the same fresh load. The two JSON results
+must be identical apart from the `dry_run` key, and the dry run must leave
+the network bit-identical. That is the preview's whole contract: what it shows is what
+the edit then does.
 
 ### Phase 4: Ask (A1)
 
@@ -742,8 +773,10 @@ paste/duplicate copy, and absent from serialization.
 
 *Tests:* an AI edit's new nodes carry `ai_placed` and its pre-existing nodes
 do not; a drag and a GUI arrange clear it; a pasted or duplicated copy of an
-AI node lacks it; a save/load round trip drops it and leaves the `.cnnd`
-byte-identical; no GUI creation path sets `hand_moved`; snapshot tests of the read-out on demolib networks (every filter,
+AI node lacks it; a save/load round trip drops it, and the saved `.cnnd` is
+byte-identical to a save of the same network with the flag cleared; no GUI
+creation path sets `hand_moved`; snapshot tests of the read-out on demolib
+networks (every filter,
 a body scope); group detection on hand-drawn columns, including a column cut
 by the box edge; an unknown name in `--nodes`.
 
@@ -782,9 +815,45 @@ wire out of a statement-placed node (a subject placed too far right of its
 consumer: the consumer side shifts, `cause: auto`); a deleted target
 (measured at its pre-edit box, excluded from `all`, rejected as a subject);
 body statements
-(clamping, growth reaches the parent); `--replace` with statements. The
-corpus test gains a generated edit kind that places its new nodes `below`
-an existing node, so the oracle runs over pushes off pinned nodes.
+(clamping, growth reaches the parent); `--replace` with statements; an edit
+with statements serializes (`query`) exactly like the same edit without
+them, apart from positions, so nothing of a statement is stored (D1).
+
+**The statement oracle** (`check_statements`, in `layout_oracle.rs`) is the
+generic check for D6's guarantee, the way the oracle's invariants are for the
+pass. Given the edit's applied statements (those not listed in `warnings`)
+and the final drawing, it re-measures every relation independently of
+`placement.rs`:
+
+- every vertical relation holds exactly (`below` / `above` gap, the `_even_with`
+  edges, `straight_from` / `straight_to` pin heights);
+- every horizontal relation keeps its order, with a gap at least the stated
+  one;
+- every `at` holds exactly, unless a later shift carried the node, in which
+  case its `moved` entry says so;
+- a group is still stacked in written order with its gap.
+
+Scenario tests call it beside `check`, so each fixture asserts only what is
+specific to it.
+
+**The corpus run gains statement edits.** It gets a generator for statement
+scripts. Each script adds one or two nodes wired to existing ones, then
+places them with a random statement form drawn from the grammar: each clause,
+each `push`, `at` (from a read-out box), `by`, `all`, a `column` / `row`
+group, `arrange`, `straighten`, and a deleted target. Each generated edit
+runs through `check`, `check_statements`, dry-run equivalence and
+`assert_deterministic`. A guard in the style of
+`at_least_one_edit_of_every_kind_lands` fails if any statement form never
+lands without a warning anywhere in the corpus. `push right` is the form to
+watch: it is the one that shifts real hand-drawn chains, so it is the one
+whose wire safety only the corpus can show.
+
+**Read-out and statements share one coordinate system.** For every node of
+every corpus scope, bodies included, `place n at (x, y)`, with `x, y` taken
+from `query --layout`, moves `n` by at most 0.5 px per axis (the read-out
+rounds, see Coordinates) and moves no other node. A body-frame mismatch
+between the read-out and the resolver fails this before it can mislead an
+agent.
 
 ---
 
@@ -793,10 +862,24 @@ an existing node, so the oracle runs over pushes off pinned nodes.
 The layout oracle (`tests/structure_designer/layout_oracle.rs`) remains the
 judge of every drawing a test produces, and the corpus test remains the only
 place real hand-drawn geometry is exercised. Every phase that moves nodes
-runs it. The report is tested against the diff it describes, never against
-itself: whatever the report says moved must be exactly what moved.
-Interaction feel (snapping, Arrange) is verified by the maintainer's manual
-walkthrough, as for other thin editor UI.
+runs it. This design adds two judges beside it, and each one checks the
+production code against an independent recomputation, never against its own
+output:
+
+- the **findings** clause of invariant 1 (Phase 3): the report's overlaps
+  against overlaps the oracle measures itself;
+- the **statement oracle** (Phase 5): each applied relation against the final
+  drawing, re-measured without `placement.rs`.
+
+The report's `moved` list cannot disagree with the actual moves, since it is
+the before/after diff (Implementation map). What is tested is that every
+entry has a cause. The preview is tested by equivalence: a dry run's result
+must equal the real edit's.
+
+Scenario fixtures state only what is specific to them and call the judges for
+the rest. The corpus generators make sure each judge sees real drawings and
+every statement form. Interaction feel (snapping, Arrange) is verified by the
+maintainer's manual walkthrough, as for other thin editor UI.
 
 ## Not in this design
 
