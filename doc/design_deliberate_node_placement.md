@@ -121,9 +121,14 @@ its own script.
 **D7. Nothing moves silently.** Every position change of an existing node is
 reported with its cause. Every edit can be previewed with `--dry-run`.
 
-**D8. A broken statement never fails the edit.** The network change is what
-matters. The statement is dropped, its subject falls back to what would have
-happened without it, and the report says so.
+**D8. A statement that parses but cannot be carried out never fails the
+edit.** The network change is what matters. The statement is dropped, its
+subject falls back to what would have happened without it, and the report
+says so. A statement that does not *parse* is a syntax error like any other.
+The text-format parser is all-or-nothing, so the edit is rejected before
+anything applies, and the AI fixes the line. Recovering from a syntax error
+inside one statement would need parser recovery that nothing else in the
+format has, and it would buy nothing: a rejected edit loses no work.
 
 **D9. Lone-direction defaults follow how people draw.** `right_of X` /
 `left_of X` align tops (a row reads along the titles). `above X` / `below X`
@@ -133,7 +138,11 @@ here for that to read well.
 **D10. Gaps have three words and a number.** `tight` / `normal` / `wide` are
 25 / 50 / 100 px across and 15 / 30 / 60 px down. `normal` is today's
 `DEFAULT_HORIZONTAL_GAP` and `VERTICAL_GAP`. Any other gap is a number of
-pixels.
+pixels. The three words are one `Gap` type in `layout/common.rs`, with
+`across()` / `down()`. The parser, the placement code, the Arrange commands
+and the read-out's group thresholds all use it, and none of them repeats a
+number. Dart mirrors the `normal` values for the snapping brackets, the same
+way it mirrors the node-size constants.
 
 **D11. Human arrange commands do not push; AI ones do.** The user watches a
 GUI arrange happen and can judge an overlap at once. Nobody is watching the
@@ -215,7 +224,7 @@ row      hole_r, hole       gap 50
 | Header | network (and scope) name, the **extent** (bounding box of all nodes in the scope, whatever the filter), node count, and the filter's match count. Everything outside the extent is free. |
 | Node lines | `name  x,y  w×h  [tags]`, sorted by top then left. Names are spelled as `query` spells them (backtick-quoted when needed, `/`-paths never needed since a listing is one scope). |
 | Tags | `ai`: an AI edit created it in this session and no human has positioned it since (`ai_placed`, D12). Every untagged node is the user's and is left alone unless asked. `comment`: a comment box. `body`: an expanded HOF; query inside with `--scope`. |
-| Groups | maximal **columns** (≥ 2 nodes, lefts within 8 px, consecutive vertical gaps ≤ 60 px) and **rows** (≥ 2 nodes, tops within 8 px, consecutive horizontal gaps ≤ 100 px), detected over the whole scope. A group is listed if any member is selected, and members outside the selection are shown as `…`. `gap` is the median gap. |
+| Groups | maximal **columns** (≥ 2 nodes, lefts within 8 px, consecutive vertical gaps ≤ `wide`, 60 px) and **rows** (≥ 2 nodes, tops within 8 px, consecutive horizontal gaps ≤ `wide`, 100 px), detected over the whole scope. A group is listed if any member is selected, and members outside the selection are shown as `…`. `gap` is the median gap. |
 
 Groups are the only inference in the output, and they are labelled as such.
 They are recomputed on every query and never stored: a persisted guess would
@@ -348,6 +357,9 @@ answer: the global reflow.
 Each of these drops the statement (D8). Its subject keeps what would have
 happened without it: a new node is placed automatically, an existing one
 stays where it is. A `layout.warnings` entry names the line and the problem.
+Grammar errors are not in this table. `at` or `by` together with a clause,
+`push` written twice, and `push left` are parse errors, which reject the edit
+(D8).
 
 | Problem | Example |
 |---|---|
@@ -356,7 +368,6 @@ stays where it is. A `layout.warnings` entry names the line and the problem.
 | an axis left open | `place x left_even_with y`, which says nothing about height |
 | a node placed, moved or arranged by two statements (the second is dropped) | `place n …` and `place [n, m] column …` |
 | a target that is a new node no earlier statement placed (it has no position yet; reorder the lines, or place it first) | `place a right_of b` before `place b at (…)`, `b` new |
-| `at` or `by` together with a clause; `push` twice, or with an unknown direction (`push left`) | |
 | `by` on a node this edit creates (it has no position to offset from) | `place n by (0, 40)` where `n` is new; `n` is placed automatically |
 | a node this edit deletes used as a subject, or listed by `arrange` / `straighten` (it is a valid *target*) | `place hole by (0, 40)` beside `delete hole` |
 | `straight_from S` / `straight_to D` with no wire between them | |
@@ -395,7 +406,7 @@ where it ended up. So `straighten [a, b]` followed by `place c below b` puts
 
 ### A3. Hear: the layout report
 
-An edit result (`EditResult`, the JSON `atomcad-cli edit` prints) gains a
+The edit result (the JSON `atomcad-cli edit` prints) gains a
 `layout` object when there is something to say: an existing node moved, a
 finding or warning arose, or the edit contained layout statements. Otherwise
 the key is absent, so an edit that leaves the drawing alone says nothing about
@@ -456,8 +467,9 @@ where and how much, so the fix is plain without a picture:
 
 Overlaps and backward wires that existed before the edit are baseline, and
 never reported here: both hand-drawn corpora contain overlaps their authors
-are content with. `atomcad-cli check-layout` lists every finding in the
-network, each marked `new` or `baseline`.
+are content with. Being "new" only means something against an edit's before
+and after drawings, so findings exist only in an edit's report. There is no
+standalone layout check.
 
 #### `--dry-run`
 
@@ -539,18 +551,53 @@ Only selected nodes move, and nothing is pushed (D11).
 
 | Area | Where | What |
 |---|---|---|
-| Shared arrange ops | `layout/arrange.rs` (new) | `arrange(scope, sizes, ids, ArrangeOp) -> Vec<Move>`: align, stack, distribute, straighten, sugiyama-subset. Used by B2 and A2. |
+| Gaps | `layout/common.rs` | `Gap { Tight, Normal, Wide, Px(f64) }` with `across()` / `down()` (D10) |
+| Shared arrange ops | `layout/arrange.rs` (new) | `arrange(scope, sizes, ids, ArrangeOp) -> HashMap<u64, DVec2>`: align, stack, distribute, straighten, sugiyama-subset. Pure: it returns target positions the way `compute_layout` / `layout_subgraph` do and moves nothing. B2 commits them through `MoveNodesCommand`, and A2 commits them through placement. |
 | Read-out | `layout/readout.rs` (new) | `layout_readout(network, registry, scope, filter) -> String`, including group detection |
-| Statements | `text_format/parser.rs`, `network_editor.rs` | `Statement::Place` / `Arrange` / `Straighten` parsed and carried by name path to the layout pass. They are not applied to the network. |
-| Resolution | `layout/placement.rs` (new) | written-order execution, clause resolution, `push` dispatch to `motion.rs`, pinning (subjects per statement, targets at the end) |
-| Pass | `layout/incremental.rs` | Step 2½; a pinned set passed into `fit`, the cascade and Step 6; every primitive's moves recorded with a cause in a `MoveLog` |
+| Statements | `text_format/parser.rs`, `network_editor.rs` | `Statement::Place` / `Arrange` / `Straighten`, the syntax only, addressed by name path. The editor does not apply them. `NetworkEditor::apply` hands them back beside the `EditResult`, and `ai_text_edit` passes them to `layout_incremental`. They never go into `EditResult`, which stays the editor's report. |
+| Resolution | `layout/placement.rs` (new) | Step 2½: written-order execution, clause resolution (name paths to ids, deleted targets from the pre-edit snapshot), and the pinned set. It adds no new placement mechanics (below). |
+| Pass | `layout/incremental.rs` | calls Step 2½ between Steps 2 and 3, and passes the pinned set to every later cascade as its `fixed` argument; Step 6's widened skip rule; cause recording at the primitive call sites |
 | Ownership tag | `node_network.rs`, `ai_text_edit.rs`, `end_move_nodes`, `arrange_selected_nodes`, the paste/duplicate copy | `Node::ai_placed` (runtime-only, not serialized): set on nodes an AI edit creates, cleared by a drag or a GUI arrange, not carried by copies (D12) |
-| Report | `ai_edit_log.rs`, `text_format::EditResult` | `MovedNode` gains `cause` / `why`; `EditResult` gains `layout: LayoutReport`; the AI History panel's Layout tab shows the causes |
+| Report | `layout/incremental.rs` (`IncrementalOutcome`), `ai_text_edit.rs`, `ai_edit_log.rs` | `IncrementalOutcome` grows into the report. Its existing `moved` list gains a cause per entry, and it gains `placed`, `auto_placed`, findings and warnings. `AiTextEditOutcome` carries it as `layout`. The API serializes the result and the report side by side (one JSON object, `layout` flattened in). The log's `LayoutOutcome.moved` takes its causes from it for the History panel's Layout tab. |
 | Dry run | `ai_text_edit.rs` | apply → capture → `TextEditNetworkCommand::undo` → drop |
-| API | `rust/src/api/structure_designer/ai_assistant_api.rs` | `ai_edit_network(code, replace, dry_run)`, `ai_query_layout(scope, nodes, box)`, `ai_check_layout()`; `arrange_selected_nodes(op)` for B2. FRB regen. |
-| HTTP + CLI | `lib/ai_assistant/http_server.dart`, `bin/atomcad_cli.dart` | `/layout`, `/check-layout`, `dry_run` on `/edit`; the matching CLI flags |
+| API | `rust/src/api/structure_designer/ai_assistant_api.rs` | `ai_edit_network(code, replace, dry_run)`, `ai_query_layout(scope, nodes, box)`; `arrange_selected_nodes(op)` for B2. FRB regen. |
+| HTTP + CLI | `lib/ai_assistant/http_server.dart`, `bin/atomcad_cli.dart` | `/layout`, and `dry_run` on `/edit`; the matching CLI flags |
 | GUI | `lib/structure_designer/node_network/` | `snap_guides.dart` (new: candidates and resolution), guide overlay in the painter, drag hook in `node_widget.dart`, Arrange submenu |
 | Skill | `.claude/skills/atomcad/` | the guidance below |
+
+### Reuse, not new mechanics
+
+Step 2½ is mostly a new way to choose *where* things go. It needs almost no
+new way of putting them there, because the incremental pass already has one.
+
+- **A `place` subject is a `Block`.** A lone node is `Block::single`. A
+  `[…] column` / `[…] row` is a block whose block-local rects come from
+  `arrange.rs`'s stack op. A placed subject then goes through Step 5's existing
+  tail, `commit_block(origin, push = true)`. Clause resolution takes the place
+  of Step 4's `target_position`, and Step 5a's slide is skipped, because a
+  stated position is not negotiable. An existing subject leaves `sizes` before
+  the commit, the same invisibility rule that keeps an added node from pushing
+  itself (`layout/AGENTS.md`).
+- **`push` picks the direction `commit_block` cascades in.** The no-`push`
+  case is today's `choose_cascade_dir`, unchanged. `push up` / `push down`
+  pass that direction. `push right` is the one statement path that calls
+  `shift_half_plane` instead, with the same closure-fixed set Step 4's "no
+  room" case uses. `commit_block` takes the direction and the pinned set as
+  parameters, and Steps 5 and 7 pass what they pass today.
+- **`arrange` / `straighten` commit per member rect, not as a block.** Their
+  members can be spread across the drawing, and cascading a bounding box would
+  sweep every node between them. Each moved member's rect is cascaded on its
+  own, with the members held.
+- **"Pinned" is not a new concept in `motion.rs`.** It is the pass's own
+  `HashSet`, handed to `cascade` as its existing `fixed` argument. The
+  primitives do not change.
+- **Causes are recorded at the call sites, not inside the primitives.**
+  `cascade` already returns the ids it moved and `shift_half_plane` its
+  `ShiftOutcome`. The pass records `(scope, id) → cause` from those return
+  values, keeping the first cause per node. `from` / `to` still come from the
+  one before/after diff that `IncrementalOutcome.moved` already computes, so a
+  reported move and an actual move cannot disagree by construction. The only
+  thing left to test is that every diffed node found a cause.
 
 ### What the skill teaches
 
@@ -673,13 +720,13 @@ undo restores positions and `hand_moved` in one step.
 
 ### Phase 3: Hear (A3)
 
-`MoveLog` and causes threaded through `layout_incremental` (only `grow` and
-`auto` exist yet), `EditResult.layout`, findings, `check-layout`, and
-`--dry-run`.
+Cause recording at the primitive call sites (only `grow` and `auto` exist
+yet), `IncrementalOutcome` grown into the report, `AiTextEditOutcome.layout`
+and its JSON, findings, and `--dry-run`.
 
-*Tests:* the existing `layout_corpus_test` additionally asserts that the
-report's `moved` set equals the actual position diff for every generated
-edit, and that every move carries a cause, and that `layout` is absent
+*Tests:* the existing `layout_corpus_test` additionally asserts, for every
+generated edit, that every node in the report's `moved` list carries a cause
+(its from/to are the diff by construction), and that `layout` is absent
 exactly when no existing node moved, no finding or warning arose, and the
 edit had no layout statements. Findings fixtures: a new overlap
 is reported, a pre-existing one is not. Dry run: the network, undo stack,
@@ -720,7 +767,8 @@ the skill guidance.
 (including a `push right` whose subject overlaps only part of a node);
 `by` on a single node and on a list (the list's relative positions are
 unchanged), and `by` measured after a Step 2 growth moved the node;
-every rejection in the warnings table falls back as specified; late binding
+every rejection in the warnings table falls back as specified, and a grammar
+error (`push left`) rejects the whole edit with nothing applied; late binding
 (a target moved by Step 2, or pushed by an earlier statement, is measured where it
 ended); `all` (measured after an earlier statement's push, excludes an
 existing subject, pushes nothing, pins nothing, scoped to a body inside
