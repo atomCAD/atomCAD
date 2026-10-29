@@ -2663,9 +2663,10 @@ pub fn get_node_type_motif_edit() -> NodeType {
             outputs a Motif with fractional coordinates computed from the unit cell. \
             Backed by the same diff-based architecture as atom_edit.\n\
             \n\
-            Connect a unit_cell to define the basis vectors for coordinate conversion. \
-            Pin 0 (result) outputs a Motif for use with atom_fill. \
-            Pin 1 (diff) outputs the raw Atomic diff for inspection."
+            Connect lattice vectors (LatticeVecs) to the unit_cell pin to define the basis \
+            vectors for coordinate conversion. \
+            Pin 0 (result) outputs a Motif; wire it into a structure node to use it with materialize. \
+            Pin 1 (diff) outputs the raw diff as a Molecule for inspection."
             .to_string(),
         summary: Some("Visual motif editor".to_string()),
         category: NodeTypeCategory::AtomicStructure,

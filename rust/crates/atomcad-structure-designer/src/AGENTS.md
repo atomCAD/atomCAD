@@ -408,7 +408,12 @@ network"`) and **one entry in `StructureDesigner::ai_edit_log`**
   (`snapshot_node_positions` **and** `layout::collect_all_wires`) is taken
   before the first statement runs, beside the log's own snapshots. Its
   `LayoutReport` travels beside the `EditResult` (`AiTextEditOutcome.layout`,
-  serialized together by `AiTextEditOutcome::to_json`), never inside it.
+  serialized together by `AiTextEditOutcome::to_json`), never inside it. The
+  script's layout statements travel the same way in the other direction:
+  `edit_network_with_layout` returns them beside the `EditResult` and they go
+  straight to `layout_incremental_with_statements`. An edit of statements alone
+  changes no text but moves nodes, so "made changes" (the undo step and the
+  dirty flag) also counts the report's `moved` / `placed`.
 - **A dry run (`ai_text_edit_with_options(…, dry_run: true)`) runs the whole
   edit, then reverts it with the edit's own undo restore**
   (`TextEditNetworkCommand::restore_before` through

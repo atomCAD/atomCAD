@@ -270,7 +270,7 @@ fn straighten(scope: &NodeNetwork, members: &[(u64, Rect)]) -> HashMap<u64, DVec
 
 /// A node's input pin `index`, measured from its top edge. Mirrors
 /// `ScopeResolver._pinPositionNormal`'s `externalInput` arm.
-fn input_pin_offset(index: usize) -> f64 {
+pub(crate) fn input_pin_offset(index: usize) -> f64 {
     PIN_ROW_OFFSET + (index as f64 + 0.5) * PIN_ROW_HEIGHT
 }
 
@@ -281,7 +281,7 @@ fn input_pin_offset(index: usize) -> f64 {
 /// `node_layout::output_pin_position` is not used here: it puts every pin one
 /// half row higher than Flutter does, which cancels between two ordinary pins
 /// but not against a title-bar pin.
-fn output_pin_offset(scope: &NodeNetwork, node_id: u64, pin_index: i32) -> f64 {
+pub(crate) fn output_pin_offset(scope: &NodeNetwork, node_id: u64, pin_index: i32) -> f64 {
     let in_title_bar = pin_index < 0
         || scope
             .nodes

@@ -137,6 +137,9 @@ mod layout_readout_test;
 #[path = "structure_designer/layout_ai_placed_test.rs"]
 mod layout_ai_placed_test;
 
+#[path = "structure_designer/layout_statements_test.rs"]
+mod layout_statements_test;
+
 #[path = "structure_designer/layout_corpus_test.rs"]
 mod layout_corpus_test;
 

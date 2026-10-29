@@ -37,6 +37,28 @@ output result
 - **Strings:** `name: "hello"` or `name: '''multi-line'''`
 - **Multi-output pin refs:** `input: atom_edit.diff` (selects pin by name). Unqualified `input: atom_edit` defaults to pin 0. Serializer emits `.pinname` only for pin index > 0.
 - **Comment anchors:** `on: mybox` (node) or `on: mybox -> union.a` (wire, `->` is a lexer token), or an array mixing both. See `doc/node_network_text_format.md`.
+- **Layout statements:** `place …`, `arrange [ … ]`, `straighten [ … ]` (`doc/design_deliberate_node_placement.md` A2).
+
+## Layout statements are parsed here and applied elsewhere
+
+`Statement::Layout(LayoutStatement)` carries the AST (`parser.rs`, bottom). The
+editor collects each with the name path of the scope it was written in
+(`ScopedLayoutStatement`) and returns them from `apply_with_layout` /
+`edit_network_with_layout`; it never acts on one, and the serializer never
+prints one (D1). Three parser details:
+
+- **The heads are not keywords.** `place` / `arrange` / `straighten` open a
+  statement only when unquoted and *not* followed by `=` or `/`, so a node of
+  that name stays assignable and path-addressable. Likewise `at`, `by`, `push`,
+  `and`, `all`, `column`, `row` and the clause words are plain identifiers.
+- **Quoting is read from the source**, because the lexer yields the same
+  `Identifier` for `` `all` `` and `all`: `Parser::parse` keeps the source
+  lines and `is_quoted` checks for a backtick at the token's column. A parser
+  built with `Parser::new(tokens)` has no source and treats nothing as quoted.
+- **A grammar error rejects the whole edit** (D8): `push left`, `at`/`by` with
+  a clause, `push` twice, a bare list without `by`. Everything that parses but
+  cannot be carried out is a *warning* from `layout/placement.rs`, never an
+  error here.
 
 ## Network-level properties (`visible`, `on`, `pin_roles`)
 
@@ -334,8 +356,13 @@ The editor's set of keys a node takes a stored value under is
 `text_property_keys`: the getter's keys **plus**
 `NodeData::text_literal_keys_with_defs`. That second hook is for pins whose
 literal is optional and so has no getter entry while unset (`record_set`'s
-row pins). Without it such a literal reads as "wire-only" and is dropped, and it
-never clears the pin's wire. "Unknown property" is checked **after** the block
+row pins, and `collect` / `import_cif` / `import_cube` / `infer_bonds`, whose
+getters write a property only once it differs from the default). Without it
+such a literal reads as "wire-only" and is dropped, and it never clears the
+pin's wire. `describe` (`node_type_introspection.rs`) reads the same hook, so it
+does not mark such a pin wire-only either; give the pin a
+`get_parameter_metadata` default too, or `describe` calls it required.
+"Unknown property" is checked **after** the block
 is applied, because one block can create the very key it sets (a `record_set`
 that adds a path row and its literal).
 

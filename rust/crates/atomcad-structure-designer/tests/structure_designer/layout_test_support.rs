@@ -14,7 +14,8 @@ use glam::DVec2;
 
 use atomcad_structure_designer::data_type::DataType;
 use atomcad_structure_designer::layout::{
-    LayoutAlgorithm, LayoutReport, WireKey, collect_all_wires, layout_incremental,
+    FindingKind, LayoutAlgorithm, LayoutReport, WireKey, collect_all_wires,
+    layout_incremental_with_statements,
 };
 use atomcad_structure_designer::node_data::NoData;
 use atomcad_structure_designer::node_network::{Node, NodeNetwork};
@@ -23,7 +24,8 @@ use atomcad_structure_designer::node_type::{
 };
 use atomcad_structure_designer::node_type_registry::NodeTypeRegistry;
 use atomcad_structure_designer::text_format::{
-    NamePath, PositionSnapshot, edit_network, snapshot_node_positions,
+    NamePath, PositionSnapshot, ScopedLayoutStatement, edit_network, edit_network_with_layout,
+    snapshot_node_positions,
 };
 
 use super::layout_oracle::{self, Drawing, Placed, Touched};
@@ -117,6 +119,13 @@ pub struct Fixture {
     pub snapshot: PositionSnapshot,
     pub wires: HashSet<WireKey>,
     pub before: Drawing,
+    /// The layout statements of the edits since the baseline, in order
+    /// (`doc/design_deliberate_node_placement.md` A2).
+    pub statements: Vec<ScopedLayoutStatement>,
+    /// Whether `run` checks the statements with the statement oracle. On by
+    /// default; a script whose later statement deliberately moves an earlier
+    /// one's target turns it off.
+    pub check_statements: bool,
 }
 
 impl Fixture {
@@ -132,6 +141,8 @@ impl Fixture {
             snapshot: PositionSnapshot::new(),
             wires: HashSet::new(),
             before: Drawing::default(),
+            statements: Vec::new(),
+            check_statements: true,
         };
         fixture.baseline();
         fixture
@@ -173,18 +184,21 @@ impl Fixture {
     }
 
     pub fn edit(&mut self, code: &str) {
-        let result = edit_network(&mut self.network, &self.registry, code, false);
+        let (result, statements) =
+            edit_network_with_layout(&mut self.network, &self.registry, code, false);
         assert!(result.success, "edit failed: {:?}", result.errors);
+        self.statements.extend(statements);
     }
 
     /// Run the incremental pass and assert every whole-pass invariant.
     pub fn run(&mut self) -> Outcome {
-        let report = layout_incremental(
+        let report = layout_incremental_with_statements(
             &mut self.network,
             &self.registry,
             &self.snapshot,
             &self.wires,
             LayoutAlgorithm::Sugiyama,
+            &self.statements,
         )
         .report;
         // Every move the pass makes to an existing node must say why
@@ -204,11 +218,32 @@ impl Fixture {
         let after = Drawing::of(&self.network, &self.registry);
         let moved_paths: HashSet<NamePath> =
             moved.iter().map(|(path, _, _)| path.clone()).collect();
-        layout_oracle::check(
+        // Invariant 1 against the report: an edit without statements must
+        // report no overlap, so for every test that predates statements this
+        // is the old "no new overlap".
+        let findings: Vec<(NamePath, NamePath)> = report
+            .findings
+            .iter()
+            .filter(|f| f.kind == FindingKind::Overlap)
+            .map(|f| (f.nodes[0].clone(), f.nodes[1].clone()))
+            .collect();
+        layout_oracle::check_overlap_findings(&self.before, &after, &findings);
+        layout_oracle::check_no_wire_flipped(&self.before, &after);
+        layout_oracle::check_untouched_unmoved(
             &self.before,
             &after,
             &Touched::new(self.delta_paths(&after), moved_paths),
         );
+        layout_oracle::check_bodies(&after);
+        if self.check_statements {
+            layout_oracle::check_statements(
+                &self.statements,
+                &report,
+                &self.before,
+                &after,
+                &self.network,
+            );
+        }
         Outcome {
             moved,
             report,

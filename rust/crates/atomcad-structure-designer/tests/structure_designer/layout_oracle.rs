@@ -36,6 +36,7 @@ use std::collections::{HashMap, HashSet};
 use glam::DVec2;
 
 use atomcad_structure_designer::layout::rendered_node_size;
+use atomcad_structure_designer::layout::{Gap, LayoutMove, LayoutReport, MoveCause};
 use atomcad_structure_designer::node_layout::{
     DEFAULT_HORIZONTAL_GAP, HOF_BODY_BOTTOM_PADDING, nodes_overlap,
 };
@@ -43,7 +44,10 @@ use atomcad_structure_designer::node_network::{
     Node, NodeNetwork, SourcePin, resolve_body_collapsed,
 };
 use atomcad_structure_designer::node_type_registry::NodeTypeRegistry;
-use atomcad_structure_designer::text_format::NamePath;
+use atomcad_structure_designer::text_format::{
+    GroupKind, LayoutClause, LayoutDirection, LayoutEdge, LayoutNodeRef, LayoutOp, LayoutSubject,
+    LayoutTargets, NamePath, PlaceSpec, ScopedLayoutStatement,
+};
 
 /// One node's geometry, keyed the way everything in this design is keyed.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -573,4 +577,455 @@ pub fn node_paths(network: &NodeNetwork) -> HashMap<NamePath, DVec2> {
     let mut out = HashMap::new();
     walk(network, &mut Vec::new(), &mut out);
     out
+}
+
+// ============================================================================
+// The statement oracle (`doc/design_deliberate_node_placement.md` Phase 5)
+// ============================================================================
+
+/// Vertical relations hold exactly; this is float noise, not slack.
+const EXACT: f64 = 1e-6;
+
+/// Flutter's pin geometry, restated here rather than imported: the oracle
+/// re-measures every relation without `placement.rs` or `arrange.rs`.
+const PIN_ROW_OFFSET: f64 = 33.0;
+const PIN_ROW_HEIGHT: f64 = 22.0;
+const TITLE_BAR_PIN_OFFSET: f64 = 16.0;
+
+/// **The statement oracle**: D6's guarantee, re-measured on the final drawing.
+///
+/// For every statement the edit applied — those with no entry in the report's
+/// `warnings` (a clamped statement has one, and is skipped) —
+///
+/// - every **vertical** relation holds exactly: `below` / `above` with their
+///   gap, `top_` / `bottom_even_with`, `straight_from` / `straight_to` pin
+///   heights, a lone `right_of` / `left_of`'s top alignment;
+/// - every **horizontal** relation keeps its order with at least its gap
+///   (`right_of` / `left_of`; a later shift may only widen it). The
+///   horizontal *equalities* (`left_` / `right_even_with`, a lone `below`'s
+///   left alignment) are not asserted: a shift line between the two ends
+///   moves one and not the other, which D6 allows;
+/// - an `at` / `by` holds exactly on y, and on x unless a later shift carried
+///   the subject right — which, for an existing node, its `moved` entry says;
+/// - a group is still stacked in written order with its gap;
+/// - a `straighten`ed node's wire from its first wired input runs level.
+///
+/// Targets are read from `after`, or from `before` for a node the edit
+/// deleted. `all` is not re-measured: its extent is whatever the drawing was
+/// at that moment of the pass. A statement whose subject or target was moved
+/// by a *later* statement is the AI's own program and is not this oracle's
+/// business — callers with such scripts do not call it.
+pub fn check_statements(
+    statements: &[ScopedLayoutStatement],
+    report: &LayoutReport,
+    before: &Drawing,
+    after: &Drawing,
+    network: &NodeNetwork,
+) {
+    let warned: HashSet<usize> = report.warnings.iter().map(|w| w.line).collect();
+    for scoped in statements {
+        let statement = &scoped.statement;
+        if warned.contains(&statement.line) {
+            continue;
+        }
+        let checker = StatementCheck {
+            scoped,
+            report,
+            before,
+            after,
+            network,
+        };
+        checker.check();
+    }
+}
+
+struct StatementCheck<'a> {
+    scoped: &'a ScopedLayoutStatement,
+    report: &'a LayoutReport,
+    before: &'a Drawing,
+    after: &'a Drawing,
+    network: &'a NodeNetwork,
+}
+
+impl StatementCheck<'_> {
+    fn label(&self) -> String {
+        format!(
+            "line {}: {}",
+            self.scoped.statement.line, self.scoped.statement.text
+        )
+    }
+
+    fn path(&self, node: &LayoutNodeRef) -> NamePath {
+        let mut path = self.scoped.scope.clone();
+        path.extend(node.scope_path.iter().cloned());
+        path.push(node.name.clone());
+        path
+    }
+
+    fn now(&self, node: &LayoutNodeRef) -> Placed {
+        let path = self.path(node);
+        self.after.get(&path).unwrap_or_else(|| {
+            panic!(
+                "{}: no node {} after the pass",
+                self.label(),
+                path.join("/")
+            )
+        })
+    }
+
+    /// A target's box: live after the pass, or at its pre-edit box if the
+    /// edit deleted it.
+    fn target(&self, node: &LayoutNodeRef) -> Placed {
+        let path = self.path(node);
+        self.after
+            .get(&path)
+            .or_else(|| self.before.get(&path))
+            .unwrap_or_else(|| panic!("{}: no target {}", self.label(), path.join("/")))
+    }
+
+    fn targets(&self, targets: &LayoutTargets) -> Option<(f64, f64, f64, f64)> {
+        let LayoutTargets::Nodes(nodes) = targets else {
+            return None; // `all`
+        };
+        let rects: Vec<Placed> = nodes.iter().map(|n| self.target(n)).collect();
+        Some(bounds(&rects))
+    }
+
+    /// The network of the scope a path's prefix names.
+    fn scope_network(&self, path: &[String]) -> &NodeNetwork {
+        let mut network = self.network;
+        for name in &path[..path.len() - 1] {
+            network = network
+                .nodes
+                .values()
+                .find(|node| node.custom_name.as_deref() == Some(name))
+                .and_then(|node| node.zone.as_deref())
+                .unwrap_or_else(|| panic!("{}: no body {name}", self.label()));
+        }
+        network
+    }
+
+    fn node_id(&self, path: &[String]) -> u64 {
+        let name = path.last().expect("a path");
+        self.scope_network(path)
+            .nodes
+            .values()
+            .find(|node| node.custom_name.as_deref() == Some(name))
+            .unwrap_or_else(|| panic!("{}: no node {}", self.label(), path.join("/")))
+            .id
+    }
+
+    fn moved_entry(&self, path: &NamePath) -> Option<&LayoutMove> {
+        self.report.moved.iter().find(|m| &m.path == path)
+    }
+
+    /// Whether a later shift may have carried the node right: a new node (no
+    /// entry to say so) or an existing one whose entry lists an `auto` move.
+    fn may_be_shifted(&self, path: &NamePath) -> bool {
+        match self.moved_entry(path) {
+            None => true,
+            Some(entry) => {
+                entry.cause == Some(MoveCause::Auto) || entry.also.contains(&MoveCause::Auto)
+            }
+        }
+    }
+
+    fn assert_y(&self, what: &str, actual: f64, expected: f64) {
+        assert!(
+            (actual - expected).abs() < EXACT,
+            "{}: {what} is at y {actual}, the statement says {expected}",
+            self.label()
+        );
+    }
+
+    fn assert_x(&self, what: &str, actual: f64, expected: f64, shifted: bool) {
+        let ok = (actual - expected).abs() < EXACT || (shifted && actual > expected);
+        assert!(
+            ok,
+            "{}: {what} is at x {actual}, the statement says {expected}",
+            self.label()
+        );
+    }
+
+    fn check(&self) {
+        match &self.scoped.statement.op {
+            LayoutOp::Place { subject, spec } => self.check_place(subject, spec),
+            LayoutOp::Straighten(nodes) => {
+                for node in nodes {
+                    self.check_level_with_first_input(node);
+                }
+            }
+            LayoutOp::Arrange(_) => {}
+        }
+    }
+
+    fn check_place(&self, subject: &LayoutSubject, spec: &PlaceSpec) {
+        let members = subject.members();
+        let rects: Vec<Placed> = members.iter().map(|m| self.now(m)).collect();
+        let (left, top, right, bottom) = bounds(&rects);
+        let shifted = members.iter().any(|m| self.may_be_shifted(&self.path(m)));
+
+        if let LayoutSubject::Group { kind, gap, .. } = subject {
+            for pair in rects.windows(2) {
+                let (a, b) = (pair[0], pair[1]);
+                match kind {
+                    GroupKind::Column => {
+                        self.assert_y(
+                            "a column member",
+                            b.position.y,
+                            a.position.y + a.size.y + gap.down(),
+                        );
+                        assert!(
+                            (a.position.x - b.position.x).abs() < EXACT || shifted,
+                            "{}: a column lost its left edge",
+                            self.label()
+                        );
+                    }
+                    GroupKind::Row => {
+                        self.assert_y("a row member", b.position.y, a.position.y);
+                        assert!(
+                            b.position.x >= a.position.x + a.size.x + gap.across() - EXACT,
+                            "{}: a row lost its order or its gap",
+                            self.label()
+                        );
+                    }
+                }
+            }
+        }
+
+        match spec {
+            PlaceSpec::At(point) => {
+                self.assert_y("the subject", top, point.y);
+                self.assert_x("the subject", left, point.x, shifted);
+            }
+            PlaceSpec::By(offset) => {
+                // Measured against where the nodes stood before the edit,
+                // which is where `by` measures from unless Step 2 moved them.
+                for member in &members {
+                    let path = self.path(member);
+                    let grown = self.moved_entry(&path).is_some_and(|m| {
+                        m.also.contains(&MoveCause::Grow) || m.cause == Some(MoveCause::Grow)
+                    });
+                    if grown {
+                        continue;
+                    }
+                    let was = self.before.get(&path).expect("a `by` subject existed");
+                    let now = self.now(member);
+                    self.assert_y("a moved node", now.position.y, was.position.y + offset.y);
+                    self.assert_x(
+                        "a moved node",
+                        now.position.x,
+                        was.position.x + offset.x,
+                        self.may_be_shifted(&path),
+                    );
+                }
+            }
+            PlaceSpec::Clauses(clauses) => {
+                let explicit_y = clauses.iter().any(|c| match c {
+                    LayoutClause::Direction { direction, .. } => {
+                        matches!(direction, LayoutDirection::Above | LayoutDirection::Below)
+                    }
+                    LayoutClause::EvenWith { edge, .. } => {
+                        matches!(edge, LayoutEdge::Top | LayoutEdge::Bottom)
+                    }
+                    LayoutClause::StraightFrom(_) | LayoutClause::StraightTo(_) => true,
+                });
+                for clause in clauses {
+                    self.check_clause(clause, &members, (left, top, right, bottom), explicit_y);
+                }
+            }
+        }
+    }
+
+    fn check_clause(
+        &self,
+        clause: &LayoutClause,
+        members: &[&LayoutNodeRef],
+        (left, top, right, bottom): (f64, f64, f64, f64),
+        explicit_y: bool,
+    ) {
+        match clause {
+            LayoutClause::Direction {
+                direction,
+                targets,
+                gap,
+                dx,
+                dy,
+            } => {
+                let Some((t_left, t_top, t_right, t_bottom)) = self.targets(targets) else {
+                    return;
+                };
+                let gap = gap.unwrap_or(Gap::Normal);
+                match direction {
+                    LayoutDirection::RightOf => {
+                        assert!(
+                            left >= t_right + gap.across() + dx - EXACT,
+                            "{}: not right of its target by the gap ({left} < {})",
+                            self.label(),
+                            t_right + gap.across() + dx
+                        );
+                        if !explicit_y {
+                            self.assert_y("the subject's top", top, t_top + dy);
+                        }
+                    }
+                    LayoutDirection::LeftOf => {
+                        assert!(
+                            right + gap.across() - dx <= t_left + EXACT,
+                            "{}: not left of its target by the gap ({right} + gap > {t_left})",
+                            self.label()
+                        );
+                        if !explicit_y {
+                            self.assert_y("the subject's top", top, t_top + dy);
+                        }
+                    }
+                    LayoutDirection::Below => {
+                        self.assert_y("the subject's top", top, t_bottom + gap.down() + dy);
+                    }
+                    LayoutDirection::Above => {
+                        self.assert_y("the subject's bottom", bottom, t_top - gap.down() + dy);
+                    }
+                }
+            }
+            LayoutClause::EvenWith { edge, targets } => {
+                let Some((_, t_top, _, t_bottom)) = self.targets(targets) else {
+                    return;
+                };
+                match edge {
+                    LayoutEdge::Top => self.assert_y("the subject's top", top, t_top),
+                    LayoutEdge::Bottom => self.assert_y("the subject's bottom", bottom, t_bottom),
+                    LayoutEdge::Left | LayoutEdge::Right => {}
+                }
+            }
+            LayoutClause::StraightFrom(source) => {
+                let source_path = self.path(source);
+                let source_id = self.node_id(&source_path);
+                for member in members {
+                    let path = self.path(member);
+                    let network = self.scope_network(&path);
+                    let id = self.node_id(&path);
+                    if let Some((arg, pin)) = first_wire_from(network, id, source_id) {
+                        let source_pin_y =
+                            self.target(source).position.y + out_offset(network, source_id, pin);
+                        let pin_y = self.now(member).position.y + in_offset(arg);
+                        self.assert_y("the straightened wire's input pin", pin_y, source_pin_y);
+                        return;
+                    }
+                }
+                panic!("{}: no wire from the source", self.label());
+            }
+            LayoutClause::StraightTo(destination) => {
+                let destination_path = self.path(destination);
+                let destination_id = self.node_id(&destination_path);
+                let network = self.scope_network(&destination_path);
+                let member_ids: Vec<(u64, &LayoutNodeRef)> = members
+                    .iter()
+                    .map(|m| (self.node_id(&self.path(m)), *m))
+                    .collect();
+                let node = &network.nodes[&destination_id];
+                for (arg, argument) in node.arguments.iter().enumerate() {
+                    for wire in &argument.incoming_wires {
+                        let SourcePin::NodeOutput { pin_index } = wire.source_pin else {
+                            continue;
+                        };
+                        if wire.source_scope_depth != 0 {
+                            continue;
+                        }
+                        let Some((id, member)) =
+                            member_ids.iter().find(|(id, _)| *id == wire.source_node_id)
+                        else {
+                            continue;
+                        };
+                        let out_y =
+                            self.now(member).position.y + out_offset(network, *id, pin_index);
+                        let in_y = self.target(destination).position.y + in_offset(arg);
+                        self.assert_y("the straightened wire's output pin", out_y, in_y);
+                        return;
+                    }
+                }
+                panic!("{}: no wire into the destination", self.label());
+            }
+        }
+    }
+
+    /// `straighten`: the node's first wired same-scope input runs level.
+    fn check_level_with_first_input(&self, node: &LayoutNodeRef) {
+        let path = self.path(node);
+        let network = self.scope_network(&path);
+        let id = self.node_id(&path);
+        let found = network.nodes[&id]
+            .arguments
+            .iter()
+            .enumerate()
+            .find_map(|(arg, argument)| {
+                argument.incoming_wires.iter().find_map(|wire| {
+                    let SourcePin::NodeOutput { pin_index } = wire.source_pin else {
+                        return None;
+                    };
+                    (wire.source_scope_depth == 0 && wire.source_node_id != id).then_some((
+                        arg,
+                        wire.source_node_id,
+                        pin_index,
+                    ))
+                })
+            });
+        let Some((arg, source, pin)) = found else {
+            return; // nothing to straighten against: it stays
+        };
+        let source_node = &network.nodes[&source];
+        let mut source_path = path.clone();
+        *source_path.last_mut().expect("a path") = source_node.custom_name.clone().expect("named");
+        let source_y = self.after.get(&source_path).expect("the source").position.y;
+        self.assert_y(
+            "a straightened input pin",
+            self.now(node).position.y + in_offset(arg),
+            source_y + out_offset(network, source, pin),
+        );
+    }
+}
+
+fn bounds(rects: &[Placed]) -> (f64, f64, f64, f64) {
+    let left = rects.iter().map(|r| r.position.x).fold(f64::MAX, f64::min);
+    let top = rects.iter().map(|r| r.position.y).fold(f64::MAX, f64::min);
+    let right = rects.iter().map(|r| r.right()).fold(f64::MIN, f64::max);
+    let bottom = rects
+        .iter()
+        .map(|r| r.position.y + r.size.y)
+        .fold(f64::MIN, f64::max);
+    (left, top, right, bottom)
+}
+
+fn in_offset(arg: usize) -> f64 {
+    PIN_ROW_OFFSET + (arg as f64 + 0.5) * PIN_ROW_HEIGHT
+}
+
+fn out_offset(network: &NodeNetwork, id: u64, pin: i32) -> f64 {
+    let title_bar = pin < 0
+        || network
+            .nodes
+            .get(&id)
+            .is_some_and(|n| n.zone.is_some() && n.node_type_name == "closure");
+    if title_bar {
+        TITLE_BAR_PIN_OFFSET
+    } else {
+        PIN_ROW_OFFSET + (pin as f64 + 0.5) * PIN_ROW_HEIGHT
+    }
+}
+
+/// The first `(input pin, source output pin)` wiring `source` into `id`.
+fn first_wire_from(network: &NodeNetwork, id: u64, source: u64) -> Option<(usize, i32)> {
+    network
+        .nodes
+        .get(&id)?
+        .arguments
+        .iter()
+        .enumerate()
+        .find_map(|(arg, argument)| {
+            argument.incoming_wires.iter().find_map(|wire| {
+                let SourcePin::NodeOutput { pin_index } = wire.source_pin else {
+                    return None;
+                };
+                (wire.source_scope_depth == 0 && wire.source_node_id == source)
+                    .then_some((arg, pin_index))
+            })
+        })
 }

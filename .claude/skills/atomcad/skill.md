@@ -40,23 +40,22 @@ Before running CLI commands, detect the appropriate command:
 
 atomCAD designs are parametric node networks (DAGs):
 
-- **Nodes** have typed input pins (parameters) and one output pin
+- **Nodes** have typed input pins (parameters) and one or more output pins (pin 0 is the primary result; e.g. `atom_edit` also has a `diff` pin, referenced as `edited.diff`), plus a title-bar function pin (`@name`) that exposes the node as a function value
 - **Wires** connect output→input of compatible types
 - **Evaluation** is lazy: only visible nodes trigger computation
 - **Custom nodes** are subnetworks with matching names
 
-Each network can have an **output node** (set via `output <node_id>`) that defines what value the network returns when used as a custom node.
+Each network can have an **output node** (set via `output <node_name>`) that defines what value the network returns when used as a custom node.
 
 ### Lattice Coordinates
 
-**Important:** Geometry coordinates (positions, sizes, radii) are in discrete **lattice units** (integers), not angstroms. The actual physical dimensions depend on the unit cell. This ensures all atomic structures are naturally lattice-aligned.
+**Important:** Lattice geometry nodes (`cuboid`, `sphere`, `half_space`, `circle`, `rect`, …) take coordinates (positions, sizes, radii) in discrete **lattice units** (integers), not angstroms. The actual physical dimensions depend on the unit cell. This ensures all atomic structures are naturally lattice-aligned. The `free_*` nodes (`free_sphere`, `free_circle`, `free_move`, `free_rot`) are the exception: they work in real space (Å, floats).
 
-### Unit Cell and Motif
+### Structure, Lattice and Motif
 
-- **Default unit cell:** Cubic diamond (3.567Å lattice constant) if none specified
-- **Default motif:** Cubic zincblende with carbon atoms (pure diamond)
-- Geometry nodes accept a `unit_cell` input to specify different lattices
-- Non-cubic unit cells cause shapes like `cuboid` to become parallelepipeds
+- **Default structure:** cubic diamond — a cubic unit cell with a 3.567 Å lattice constant and the cubic zincblende motif with carbon atoms (pure diamond) — when nothing is wired
+- 3D geometry nodes have an optional, wire-only `structure` input (type `Structure`) to specify a different lattice/motif; build one with the `structure` node from `lattice_vecs`, `motif` and `motif_offset` (all optional; unwired ones default to diamond). 2D nodes take a `d_plane` (`DrawingPlane`) input instead
+- Non-cubic unit cells cause shapes like `cuboid` to become parallelepipeds (and `sphere` an ellipsoid)
 
 ### Data Types
 
@@ -64,15 +63,22 @@ Each network can have an **output node** (set via `output <node_id>`) that defin
 |------|-------------|
 | `Bool`, `String`, `Int`, `Float` | Primitives |
 | `Vec2`, `Vec3`, `IVec2`, `IVec3` | 2D/3D vectors (float/int) |
+| `IMat2`, `IMat3`, `Mat3` | Matrices (int/float) |
 | `Geometry2D` | 2D shapes (for extrusion) |
-| `Geometry` | 3D geometry (SDF-based) |
-| `Atomic` | Atomic structure (atoms + bonds) |
-| `UnitCell` | Crystal lattice parameters |
+| `Blueprint` | 3D geometry (SDF-based) + the `Structure` it will be carved from; output of `cuboid`, `sphere`, `union`, … |
+| `Crystal` | Atoms (+ bonds) still bound to a structure; output of `materialize` |
+| `Molecule` | Free-floating atoms, no structure; output of `exit_structure`, `import_xyz` |
+| `HasAtoms`, `HasStructure`, `HasFreeLinOps` | Abstract input-pin types: Crystal or Molecule / Blueprint or Crystal / Blueprint or Molecule |
+| `Structure` | Lattice vectors + motif + motif offset |
+| `LatticeVecs` | Unit cell basis vectors |
 | `Motif` | Crystal motif definition |
 | `[T]` | Array of type T |
+| `Iter[T]` | Lazy stream (`range`, `map`, `filter`); turn it into `[T]` with `collect` |
+| `Record(Name)`, `{a: Int, b: Float}` | Named / anonymous record |
 | `A -> B` | Function type |
+| `Unit` | Result of effect nodes (`foreach`, `export_atoms`) |
 
-**Implicit conversions:** `Int`↔`Float`, `IVec`↔`Vec`, `T`→`[T]`
+**Implicit conversions:** `Int`↔`Float`, `IVec2`↔`Vec2`, `IVec3`↔`Vec3`, `IMat3`↔`Mat3`, `T`→`[T]`, `[T]` or `T`→`Iter[T]`, and a concrete phase type to its abstract supertypes (e.g. `Crystal`→`HasAtoms`). `Iter[T]`→`[T]` is **not** implicit (use `collect`).
 
 Array pins (marked with dot) accept multiple wires; values are concatenated.
 
@@ -123,6 +129,7 @@ note2 = Comment { text: "the union branch", on: sphere1 -> union1.shapes }
 vec3 { x: 1.5, y: 2.5, z: 3.5 }
 ivec3 { x: 1, y: 2, z: 3 }
 ```
+A tuple may hold only numbers: to build a vector from node values, wire them into a vector node (`ext = ivec3 { x: size, y: size, z: size }`, then `extent: ext`). `(size, size, size)` is a parse error.
 
 ### Zone Bodies (`map`, `filter`, `fold`, `foreach`, `zip_with`, `closure`)
 
@@ -304,24 +311,30 @@ Two things a body edit commonly trips on, both reported this way:
 - A body with **no wire into its zone-output pin** is a blocking error — a
   freshly created HOF gets an *empty* body, so `m1 = map { xs: r }` alone leaves
   `m1` invalid until you give it a `body` or wire its `f:`.
-- A `^` depth that walks past the outermost scope is an error, not a silent drop.
+- A `^` depth that walks past the outermost scope is not silently dropped: the
+  wire is not made and `warnings` names it (`'^^scale' reaches past the
+  top-level network`).
 
-**Round-trip caveat:** `query` output contains blank lines, and `atomcad-cli
-edit` reading from **stdin** stops at the first blank line. To feed query output
-straight back, strip the blank lines, or pass it via `--code` with `\n` escapes.
+**Round-trip:** piped or redirected stdin is read to EOF, blank lines included,
+so `query` output can be fed straight back to `edit --replace`. Only an
+*interactive* (terminal) `edit` stops at the first empty line or a lone `.`.
 
 #### The `layout` section: what the edit did to the canvas
 
 The text format carries no positions, so the JSON is also the only place you
 learn what an edit did to the drawing. When it moved a node that already
-existed, or left a problem behind, the result has a `layout` object:
+existed, left a problem behind, or had layout statements, the result has a
+`layout` object:
 
 ```json
 "layout": {
-  "auto_placed": [ { "node": "n", "box": [520, 100, 160, 60] } ],
+  "placed": [ { "node": "n", "box": [100, 370, 160, 60] } ],
+  "auto_placed": [ { "node": "m", "box": [520, 100, 160, 60] } ],
   "moved": [
+    { "node": "note", "from": [100, 370], "to": [100, 460], "cause": "push",
+      "dir": "down", "why": "line 3: place n below d push down" },
     { "node": "b", "from": [520, 100], "to": [730, 100], "cause": "auto",
-      "why": "made room for new node n" }
+      "why": "made room for new node m" }
   ],
   "findings": [],
   "warnings": []
@@ -331,20 +344,29 @@ existed, or left a problem behind, the result has a `layout` object:
 - **Coordinates:** canvas pixels, x right, y **down**; a position is a node's
   top-left corner, a `box` is `[x, y, width, height]`. Body nodes are in body
   coordinates (origin at the body's top-left). Whole pixels, rounded.
-- `auto_placed` — every node the edit created, with its **real rendered box**
-  (an expanded `map` is far wider than an ordinary 160 px node).
+- `placed` — every node a `place` statement positioned, new or existing, with
+  its final box.
+- `auto_placed` — every other node the edit created, with its **real rendered
+  box** (an expanded `map` is far wider than an ordinary 160 px node).
 - `moved` — every *pre-existing* node whose position changed: `from` / `to`,
   the `cause` of its first move, a short `why`, and `also` (later, different
   causes) when there were any.
-- `cause` is `grow` (a node the edit enlarged pushed it) or `auto` (room made
-  for a new node, a new wire kept running left to right, a comment returned
-  beside its anchor).
-- `findings` — what this edit **created** and nothing repaired, one line each:
+- `cause` is one of: `place` (a `place` statement put it there), `arrange` (an
+  `arrange` / `straighten` listed it), `push` (a placed or arranged node landed
+  on it; `dir` is `up` / `down` / `right`), `grow` (a node the edit enlarged
+  pushed it), `auto` (room made for a node no statement placed, a wire kept
+  running left to right, a comment returned beside its anchor). For a statement
+  cause, `why` is `line N: <statement>`.
+- `findings` — what this edit **created** and nothing repaired, each
+  `{ "kind", "message", "nodes" }` with `kind`
   `overlap` (two nodes overlap that did not before) or `backward_wire` (a new
   wire runs right to left, e.g. because it closes a cycle). Pre-existing
   overlaps and backward wires are the user's baseline and never reported.
-- `warnings` — always empty for now.
-- **No `layout` key** means no existing node moved and nothing was found.
+- `warnings` — layout statements that could not be carried out:
+  `{ "line", "statement", "problem", "fallback" }`. The edit itself still
+  applied; the `fallback` says what happened to the subject instead.
+- **No `layout` key** means no existing node moved, nothing was found, and the
+  edit had no layout statements.
 
 #### `--dry-run`: preview an edit
 
@@ -395,6 +417,71 @@ atomcad-cli query --layout --scope=m1             # a HOF body (path: m1/m2)
 - `--nodes` and `--box` are exclusive. An unknown name prints
   `(no such node)`. Use `--box=…` (with `=`) when a coordinate is negative.
 
+#### Layout statements: saying where things go
+
+An edit script can also place nodes. Three statements, written anywhere in the
+script; they run after the network change, **in the order written**, each
+seeing the drawing the earlier ones left. Nothing of them is stored.
+
+```
+place      <subject> at (<x>, <y>)          [push up|down|right]
+place      <name> | [<name>, …] by (<dx>, <dy>)  [push …]
+place      <subject> <clause> [, <clause>]  [push …]
+arrange    [<name>, …]                      [push …]
+straighten [<name>, …]                      [push …]
+```
+
+- **Subject:** `n`, or `[a, b] column` / `[a, b] row` (stacked in written order,
+  lefts / tops aligned, optional `(gap: G)`), placed as one box.
+- **Clauses:** `right_of T`, `left_of T` (alone: tops aligned too),
+  `below T`, `above T` (alone: lefts aligned too), `top_even_with T`,
+  `bottom_even_with T`, `left_even_with T`, `right_even_with T`,
+  `straight_from S` (the wire `S` → subject runs level), `straight_to D`
+  (subject → `D` runs level). Each axis stated exactly once: a lone direction
+  supplies the other axis, an explicit clause replaces it.
+- **Targets:** `T`, `a and b` (their joint box), or `all` (the whole drawing's
+  extent, the subject excluded, measured when the statement runs; a node named
+  all is `` `all` ``). A node this edit deletes is still a target, at its old box.
+- **Options** on the four directions: `(gap: G, dx: n, dy: n)`. `G` is `tight`
+  / `normal` / `wide` (25 / 50 / 100 px across, 15 / 30 / 60 down) or pixels.
+- **`at (x, y)`** is a top-left corner in `query --layout`'s coordinates.
+  **`by (dx, dy)`** moves existing nodes from where they stand *when the
+  statement runs* — `place x by (0, 40)`, `place [a, b, c] by (210, 0)`. Neither
+  combines with a clause.
+- **`push`**: what the subject lands on always moves out of its way. No `push`:
+  each such node goes up or down, whichever is cheaper. `push down` / `push up`:
+  that way, and what they hit. `push right`: everything at or right of the
+  subject's left edge shifts right together, what feeds the subject stays.
+  There is no `push left`; to make room before `T`, place after `T`'s
+  predecessor and `push right`.
+- **`arrange [a, b, c]`** lays those nodes out by their wiring among
+  themselves, keeping their top-left corner; **`straighten [a, b]`** moves each
+  vertically until the wire from its first connected input runs level. Unlisted
+  nodes move only to make room.
+- **Afterwards:** what a statement placed, and what it measured against, stays
+  put for the rest of the edit; new nodes no statement placed go around them.
+  Vertical relations hold exactly; horizontal ones keep their order and can
+  only widen (when a wire must be kept running left to right).
+- Inside a body, write the statements in its `body { … }` block or as paths
+  (`place m1/x below m1/d`); coordinates are body coordinates, and a negative
+  one is clamped to 0 with a warning.
+- **Rejected statements** (an unknown node, an axis twice or never, a node
+  placed twice, a new node used as a target before it is placed, `by` on a new
+  node, a deleted node as subject, `straight_*` with no wire) are dropped and
+  listed in `layout.warnings`; the edit still applies. A statement that does not
+  parse (`push left`, `at` plus a clause, `push` twice) rejects the whole edit.
+- Nodes named `place`, `arrange` or `straighten` still work:
+  `place = int { value: 1 }` is an assignment.
+
+```
+place [n, pitch] column below d push down   # into a column; what is under d makes way
+place r below all, left_even_with hole_r     # a new lane under everything
+place holes right_of r, straight_from r      # attach relative to r
+place rot right_of slab push right           # into a chain
+place note by (0, 40)
+straighten [cut, fill]
+```
+
 #### Every edit is one undo step
 
 Each `edit` call is recorded in the app's undo stack as a single step labelled
@@ -411,6 +498,7 @@ reconstruct a previous state yourself; there is no CLI undo command.
 atomcad-cli --help       # Show help
 atomcad-cli --port=PORT  # Custom server port (default: 19847)
 atomcad-cli --document=DOC <command>  # Refuse unless DOC is the active tab
+atomcad-cli --label="Opus / skill v2" <command>  # Name this client in the AI History panel (or set ATOMCAD_CLIENT_LABEL)
 ```
 
 ### Tabs: always pass `--document`
@@ -431,8 +519,8 @@ atomcad-cli --document C:/work/host.cnnd query       # a saved design: its path
 atomcad-cli edit --document 3 --code="s = sphere {}" # an Untitled one: its id
 ```
 
-- `load` and `new` print the document id and path of the tab they opened;
-  use it from then on. `file` prints it too (`Document: 2`).
+- `load` prints the document id and path of the tab it opened, `new` the
+  document id; use it from then on. `file` prints it too (`Document: 2`).
 - `--document` may go before or after the command. A relative path is
   resolved against the CLI's working directory; any spelling of the path
   works.
@@ -462,6 +550,10 @@ atomcad-cli edit --replace
 # Preview: same JSON (plus "dry_run": true), then everything is reverted
 atomcad-cli edit --dry-run --code="..."
 
+# Say where things go (see "Layout statements")
+atomcad-cli edit --code="n = int { value: 3 }
+place n below h push down"
+
 # Node boxes on the canvas, and inferred columns/rows (see "query --layout")
 atomcad-cli query --layout [--nodes=a,b | --box=x0,y0,x1,y1] [--scope=m1/m2]
 ```
@@ -481,8 +573,8 @@ output result
 
 The output includes:
 - Header with active network name
-- Description statement (if set)
-- Node definitions in topological order
+- Description statement (if set), then `summary` statement (if set)
+- Node definitions in topological order (zone bodies as nested `body { … }` blocks)
 - Output statement (if set)
 - Footer with node count
 
@@ -510,6 +602,9 @@ EOF
 
 ```bash
 # Escape sequences: \n for newline, \t for tab, \\ for literal backslash
+# (the CLI turns every \n into a real newline, including one inside a string
+#  literal, which is then an unterminated string: a "\n" meant for a string
+#  must reach the CLI as \\n — use stdin for such scripts)
 atomcad-cli edit --replace --code="base = cuboid { extent: (10, 10, 10) }\nhole = sphere { radius: 4 }\nresult = diff { base: [base], sub: [hole], visible: true }"
 ```
 
@@ -540,9 +635,9 @@ atomcad-cli networks rename <old> <new>
 **Output example for `networks`:**
 ```
 Node Networks:
-  * Main              (active)
-    cube
-    pattern           [ERROR: Invalid parameter type]
+* Main  (active)
+  cube
+  pattern  [ERROR: Invalid parameter type]
 
 3 networks (1 with errors)
 ```
@@ -617,11 +712,16 @@ Saved: /path/to/design.cnnd
 File: /path/to/design.cnnd
 Modified: yes
 Networks: 3
+Document: 2
 
-# file status (no file loaded)
+# file status (an Untitled tab)
 File: (none)
 Modified: no
 Networks: 1
+Document: 3
+
+# new success
+New project created in a new tab (document 4).
 ```
 
 **Behavior notes:**
@@ -651,14 +751,15 @@ atomcad-cli evaluate atoms1 --verbose
 
 **Output formats:**
 - **Primitives** (Float, Int, Bool, String): Display the value directly (e.g., `42`, `3.140000`, `true`)
-- **Vectors** (Vec3, IVec3, etc.): Display coordinates (e.g., `(5.000000, 10.000000, 3.000000)`)
-- **Geometry/Geometry2D**: Display `Geometry` or `Geometry2D` (brief), CSG tree details (verbose)
-- **Atomic**: Display `Atomic` (brief), or atom/bond counts and sample atoms (verbose)
+- **Vectors** (Vec3, IVec3, etc.): Display coordinates (e.g., `(5.000000, 10.000000, 3.000000)`, `(1, 2, 3)`)
+- **Blueprint/Geometry2D**: Display `Blueprint` or `Geometry2D` (brief); verbose shows the lattice vectors, motif offset and CSG tree
+- **Crystal/Molecule**: Atom/bond counts, formula, bond orders and bounding box (brief); atom/bond counts and the first 10 atoms (verbose)
+- **Iterators**: Display `Iterator` (wire into `collect` to see the elements)
 
 **Examples:**
 ```bash
 $ atomcad-cli evaluate sphere1
-Geometry
+Blueprint
 
 $ atomcad-cli evaluate count1
 42
@@ -666,14 +767,22 @@ $ atomcad-cli evaluate count1
 $ atomcad-cli evaluate pos1
 (5.000000, 10.000000, 3.000000)
 
+$ atomcad-cli evaluate atoms1
+5746 atoms, 8918 bonds
+C4030H1716
+bonds: 8918 single
+bbox: 29.8 x 29.8 x 29.8 A
+
 $ atomcad-cli evaluate atoms1 --verbose
-Atomic:
-atoms: 968
-bonds: 1372
+Crystal:
+atoms: 5746
+bonds: 8918
 first 10 atoms:
-  [1] Z=6 pos=(-6.242250, -6.242250, -4.458750) bonds=4
+  [1] Z=6 pos=(0.000000, 0.000000, 0.000000) depth=0.000 bonds=4
   ...
 ```
+
+Only top-level nodes of the active network are found by name.
 
 ### Run a chemisorb search
 
@@ -739,7 +848,7 @@ atomcad-cli nodes --verbose
 # Get detailed info about any node type (built-in or custom)
 atomcad-cli describe <node-name>
 atomcad-cli describe sphere
-atomcad-cli describe atom_fill
+atomcad-cli describe materialize
 ```
 
 Use `describe` to discover input pins, types, defaults, and behavior for any node.
@@ -808,12 +917,12 @@ atomcad-cli display --geometry-viz solid              # Solid mesh (default)
 atomcad-cli display --geometry-viz wireframe          # Wireframe mesh
 
 # Set node display policy
-atomcad-cli display --node-policy manual           # User controls visibility
-atomcad-cli display --node-policy prefer-selected  # Show selected node (default)
+atomcad-cli display --node-policy manual           # User controls visibility (default)
+atomcad-cli display --node-policy prefer-selected  # Show selected node
 atomcad-cli display --node-policy prefer-frontier  # Show output nodes
 
 # Set background color
-atomcad-cli display --background 30,30,30          # Dark gray (default)
+atomcad-cli display --background 0,0,0             # Black (default)
 atomcad-cli display --background 255,255,255       # White
 
 # Combine multiple settings
@@ -823,8 +932,10 @@ atomcad-cli display --atomic-viz space-filling --geometry-viz wireframe
 **Parameters:**
 - `--atomic-viz <mode>` — Atomic visualization: `ball-and-stick` (default) or `space-filling`
 - `--geometry-viz <mode>` — Geometry visualization: `solid` (default), `wireframe`, or `surface-splatting`
-- `--node-policy <policy>` — Node display: `prefer-selected` (default), `manual`, or `prefer-frontier`
-- `--background R,G,B` — Background color as RGB values 0-255 (default: 30,30,30)
+- `--node-policy <policy>` — Node display: `manual` (default), `prefer-selected`, or `prefer-frontier`
+- `--background R,G,B` — Background color as RGB values 0-255 (default: 0,0,0)
+
+Display settings are the user's saved preferences (they persist across sessions), so change them only when needed.
 
 **Response:** Returns JSON with current display state:
 ```json
@@ -833,8 +944,8 @@ atomcad-cli display --atomic-viz space-filling --geometry-viz wireframe
   "display": {
     "atomic_visualization": "ball-and-stick",
     "geometry_visualization": "solid",
-    "node_display_policy": "prefer-selected",
-    "background_color": [30, 30, 30]
+    "node_display_policy": "manual",
+    "background_color": [0, 0, 0]
   }
 }
 ```
@@ -870,10 +981,10 @@ Screenshot saved: /path/to/output.png (1920x1080)
 
 **Note:** Relative paths are resolved relative to the CLI's working directory, not atomCAD's.
 
-**Always verify screenshots:** After capturing, read the PNG file to check the result. If the view is too close (only atoms visible, no overall shape) or too far (object too small), adjust the camera and retake. Common issue: using small camera coordinates puts you inside the atomic structure. If the entire screenshot appears green, you are too close to the objects (geometry is rendered in green).
+**Always verify screenshots:** After capturing, read the PNG file to check the result. If the view is too close (only atoms visible, no overall shape) or too far (object too small), adjust the camera and retake. Common issue: using small camera coordinates puts you inside the atomic structure. If the entire screenshot is one flat geometry colour, you are probably inside or too close to a shape (solid geometry is drawn deep orange for the active node, blue-gray otherwise).
 
 **Recommended visualization styles for attractive screenshots:**
-1. **Ball-and-stick with visible geometry:** Use `--atomic-viz ball-and-stick` and make the geometry node feeding into `atom_fill` visible (`visible: true`). This shows atoms running along the surface of the green geometry shape—a visually striking combination.
+1. **Ball-and-stick with visible geometry:** Use `--atomic-viz ball-and-stick` and make the geometry node feeding into `materialize` visible (`visible: true`). This shows atoms running along the surface of the geometry shape—a visually striking combination.
 2. **Space-filling only:** Use `--atomic-viz space-filling` and hide geometry nodes (`visible: false`). The large van der Waals spheres will mostly occlude any geometry anyway, so keeping geometry hidden produces cleaner results.
 
 ### Typical AI Agent Workflow
@@ -910,7 +1021,7 @@ Commands:
 - `evaluate`/`e <node>` — Evaluate a node
 - `run <node>` — Run a `chemisorb` node's search
 - `debug-select <node> [<path>] [posed|seated|relaxed] [show]` — Show a `chemisorb` search-tree item on its debug pins
-- `nodes` — List available node types
+- `nodes`/`n` — List available node types
 - `describe`/`d <node>` — Describe a node type
 - `networks` — List all node networks
 - `networks add [--name X]` — Create new network
@@ -924,6 +1035,8 @@ Commands:
 - `save [path]` — Save to file
 - `file` — Show current file status
 - `new` — New project in a new tab
+- `documents` — List the open tabs
+- `libraries`/`libs […]` — Linked libraries (same subcommands as on the command line)
 - `help`/`?` — Show help
 - `quit`/`exit` — Exit REPL
 
@@ -934,7 +1047,7 @@ Commands:
 ```bash
 # Create sphere geometry and fill with atoms
 atomcad-cli edit --code="s = sphere { radius: 5, visible: true }"
-atomcad-cli edit --code="atoms = atom_fill { shape: s, visible: true }"
+atomcad-cli edit --code="atoms = materialize { shape: s, visible: true }"
 ```
 
 ### Boolean operations on geometry
@@ -958,10 +1071,12 @@ atomcad-cli edit --replace --code="base = cuboid { extent: (10, 10, 10), visible
 The `atom_edit` node applies a diff (additions, deletions, replacements, moves) to an input atomic structure. Edits are specified via a line-based text format in the `diff` property.
 
 ```bash
-# Create a silicon crystal and edit it (T-center defect)
+# Fill with Si atoms and edit it (T-center defect). The PRIMARY/SECONDARY override
+# changes only the elements: the lattice stays the default diamond one (3.567 Å),
+# which is what these coordinates are in.
 atomcad-cli edit --replace <<'EOF'
 geom = cuboid { extent: (2, 2, 2), visible: false }
-atoms = atom_fill { shape: geom, parameter_element_value_definition: "PRIMARY Si\nSECONDARY Si", rm_single: true, visible: false }
+atoms = materialize { shape: geom, parameter_element_value_definition: "PRIMARY Si\nSECONDARY Si", rm_single: true, visible: false }
 edited = atom_edit { molecule: atoms, diff: """# Replace two Si with C, add bridging H
 ~C @ (0.89175, 2.67525, 2.67525)
 ~C @ (1.7835, 1.7835, 3.567)
@@ -1000,48 +1115,57 @@ bond 1-2 single
 EOF
 ```
 
-**atom_edit options:**
-- `output_diff: true` — Show the diff itself instead of the applied result (for debugging/visualization)
-- `show_anchor_arrows: true` — When viewing diff, show arrows from anchor positions to moved atoms
-- `base_bonds: true` — Include base bonds between matched diff atoms in diff output
-- `tolerance: 0.1` — Positional matching tolerance in angstroms (default: 0.1)
+**atom_edit outputs and options:**
+- Two output pins: `result` (pin 0, the edited structure — a `Crystal` in gives a `Crystal` out, a `Molecule` a `Molecule`; with no input it is a `Molecule` built from the diff alone) and `diff` (pin 1, the diff itself as a `Molecule`). Reference the diff as `edited.diff`; display it with `visible: [diff]`. (The old `output_diff` property is deprecated: display the `diff` pin instead.)
+- `show_anchor_arrows` — In the `diff` output, show arrows from anchor positions to moved atoms (default: true)
+- `base_bonds` — Include base bonds between matched diff atoms in the `diff` output (default: true)
+- `tolerance` — Positional matching tolerance in angstroms (default: 0.1)
+- `error_on_stale` — Report an error when diff lines no longer match the input (default: false)
 
 ### Creating realistic atomic structures
 
 ```bash
 # Passivate dangling bonds with hydrogen
-atomcad-cli edit --code="atoms = atom_fill { shape: geom, passivate: true, visible: true }"
+atomcad-cli edit --code="atoms = materialize { shape: geom, passivate: true, visible: true }"
 
 # Remove single-bond atoms recursively (cleaner structures)
-atomcad-cli edit --code="atoms = atom_fill { shape: geom, rm_single: true, visible: true }"
+atomcad-cli edit --code="atoms = materialize { shape: geom, rm_single: true, visible: true }"
 
-# Override motif elements (e.g., silicon carbide instead of diamond)
-atomcad-cli edit --code="atoms = atom_fill { shape: geom, parameter_element_value_definition: \"PRIMARY Si\\nSECONDARY C\", visible: true }"
+# Override motif elements (e.g., silicon carbide instead of diamond);
+# stdin keeps the string's \n away from the --code escape processing
+atomcad-cli edit <<'EOF'
+atoms = materialize { shape: geom, parameter_element_value_definition: "PRIMARY Si\nSECONDARY C", visible: true }
+EOF
 ```
 
-**atom_fill options:**
-- `passivate: true` — Add hydrogen atoms to dangling bonds
-- `rm_single: true` — Recursively remove atoms with only one bond
+**materialize options:**
+- `passivate: true` — Add terminating atoms to dangling bonds (default: true); hydrogen unless `passiv_elem` (atomic number, default 1) picks F/Cl/Br/I
+- `rm_single: true` — Recursively remove atoms with only one bond (default: false)
+- `rm_unbonded: true` — Remove atoms left with zero bonds after the cut (default: true)
 - `surf_recon: true` — Enable surface reconstruction (cubic diamond (100) 2×1 only)
 - `parameter_element_value_definition: "..."` — Override motif parameter elements (newline-separated `PARAM_NAME Element`, e.g., `"PRIMARY Si\nSECONDARY Si"` for pure silicon)
-- `m_offset: (x, y, z)` — Fractional offset (0-1) to adjust cut position
+
+Run `atomcad-cli describe materialize` for the full, current pin list.
 
 ### Parametric design with custom nodes
 
 Custom nodes are created by defining subnetworks:
 
 1. Create a node network named `my_shape` using `networks add --name "my_shape"`
-2. Add `parameter` nodes to define inputs (each parameter becomes an input pin)
-3. Set the network's output node via `output <node_id>`
+2. Add `parameter` nodes to define inputs (each parameter becomes an input pin): `param_name` is the pin name, `data_type` its type, `sort_order` its position, and the optional `default` is **wire-only** (wire a value node into it)
+3. Set the network's output node via `output <node_name>`
 4. Switch to another network and use `my_shape` as a node type
 
 ```bash
 # Create a custom node (subnetwork) for a parameterized shape
 atomcad-cli networks add --name "rounded_cube"
 atomcad-cli edit --replace <<'EOF'
-size = parameter { name: "size", type: Int, default: 10 }
-radius = parameter { name: "corner_radius", type: Int, default: 2 }
-base = cuboid { extent: (size, size, size) }
+size_default = int { value: 10 }
+size = parameter { param_name: "size", data_type: Int, sort_order: 0, default: size_default }
+radius_default = int { value: 2 }
+radius = parameter { param_name: "corner_radius", data_type: Int, sort_order: 1, default: radius_default }
+ext = ivec3 { x: size, y: size, z: size }
+base = cuboid { extent: ext }
 corner = sphere { radius: radius }
 result = intersect { shapes: [base, corner] }
 output result
@@ -1052,7 +1176,7 @@ atomcad-cli networks activate "Main"
 atomcad-cli edit --code="part = rounded_cube { size: 20, corner_radius: 3, visible: true }"
 
 # Fill with atoms
-atomcad-cli edit --code="atoms = atom_fill { shape: part, passivate: true, visible: true }"
+atomcad-cli edit --code="atoms = materialize { shape: part, passivate: true, visible: true }"
 ```
 
 **Simpler example:**
@@ -1061,7 +1185,8 @@ atomcad-cli edit --code="atoms = atom_fill { shape: part, passivate: true, visib
 # Create a reusable scaled sphere node
 atomcad-cli networks add --name "scaled_sphere"
 atomcad-cli edit --replace <<'EOF'
-size = parameter { name: "size", type: "Int", default: 5 }
+size_default = int { value: 5 }
+size = parameter { param_name: "size", data_type: Int, default: size_default }
 s = sphere { radius: size }
 output s
 EOF
@@ -1073,19 +1198,22 @@ atomcad-cli edit --code="part1 = scaled_sphere { size: 10, visible: true }"
 
 ### Functional programming with map
 
-The `map` node applies a function to each array element. Combined with partial application:
+The `map` node lazily applies a function to each element of `xs` and outputs an **iterator** (`Iter[T]`); wire it into `collect` (pin `iter`) to get an array you can display or evaluate. The function is either its inline `body { … }` (see *Zone Bodies*) or a function value wired into `f`. A node's function pin `@name` turns the node into a function of its **unwired** inputs; its wired inputs are baked in (partial application):
 
 ```bash
-# range creates [0, 1, 2, ...] array
-# pattern is a custom node with inputs: index (Int), gap (Int)
-# When wired to map's f input, gap is bound; only index varies
+# range yields 0, 1, 2, ... (an Iter[Int])
+# p has inputs index and gap; gap is wired, so @p is a function of index alone.
+# A custom node works the same way: p = pattern { gap: g }, then f: @p
 atomcad-cli edit <<'EOF'
 r = range { start: 0, count: 5, step: 1 }
-result = map { xs: r, f: pattern, gap: 3, visible: true }
+g = int { value: 3 }
+p = expr { expression: "index * gap", parameters: [{ name: "index", data_type: Int }, { name: "gap", data_type: Int }], gap: g }
+m = map { xs: r, input_type: Int, output_type: Int, f: @p }
+c = collect { iter: m, visible: true }
 EOF
 ```
 
-Extra parameters beyond the expected function signature are bound at wire-time (partial application), enabling parametric patterns.
+`map.f` accepts any function whose first parameter matches the element type; `@p` with more than one unwired input yields an iterator of functions of the remaining ones.
 
 ### Mathematical expressions with expr
 
@@ -1128,13 +1256,14 @@ EOF
 ## Important Notes
 
 - **facet_shell:** Currently only works correctly with cubic unit cells
-- **lattice_move/lattice_rot:** Discrete lattice transformations (integers only). For continuous transforms on atomic structures, use `atom_trans` instead:
+- **structure_move/structure_rot:** Discrete lattice transformations (integers only). For continuous transforms on atomic structures, convert the `Crystal` to a `Molecule` with `exit_structure`, then use `free_move` / `free_rot` (they reject a `Crystal`):
   ```bash
-  atoms = atom_fill { shape: geom, visible: false }
-  moved = atom_trans { molecule: atoms, translation: (10.0, 0.0, 0.0), visible: true }
+  atoms = materialize { shape: geom, visible: false }
+  mol = exit_structure { input: atoms }
+  moved = free_move { input: mol, translation: (10.0, 0.0, 0.0), visible: true }
   ```
 - **half_space:** Creates infinite half-spaces; useful for clipping geometry via intersection
-- **Lone atoms:** `atom_fill` automatically removes atoms with zero bonds after the geometry cut
+- **Lone atoms:** `materialize` removes atoms with zero bonds after the geometry cut (its `rm_unbonded` pin, on by default)
 
 ## See Also
 

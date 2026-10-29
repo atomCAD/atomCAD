@@ -10,6 +10,7 @@ Automatic layout algorithms for repositioning nodes in a network.
 | `delta.rs` | `EditDelta` / `diff_scope` — the incremental pass's input |
 | `motion.rs` | `shift_half_plane` / `cascade` / `grow_rect` — the two motion primitives (see below) |
 | `incremental.rs` | The incremental pass, step by step (all eight, and the driver) |
+| `placement.rs` | Step 2½: the AI's layout statements (`place` / `arrange` / `straighten`), pinning, warnings (see below) |
 | `report.rs` | `LayoutReport`: moved nodes with their causes, new nodes' boxes, findings (see below) |
 | `readout.rs` | `layout_readout` — `query --layout`: one scope's boxes, tags and inferred groups (see below) |
 | `common.rs` | Shared types and constants (`Gap`: the three gap words), depth computation, and the comment-placement pass |
@@ -29,8 +30,10 @@ Automatic layout algorithms for repositioning nodes in a network.
 - `layout_subgraph(network, registry, ids, algorithm)` → positions for **only**
   the nodes in `ids`, wired to each other alone (see below)
 - `incremental::layout_incremental(network, registry, snapshot, wires, algorithm)`
-  → the incremental pass over every scope, inside-out. **This is what an AI edit
-  runs**: `ai_text_edit` calls it unconditionally on an applied edit and records
+  → the incremental pass over every scope, inside-out.
+  `layout_incremental_with_statements(…, statements)` is the same pass with the
+  edit's layout statements as Step 2½. **That is what an AI edit runs**:
+  `ai_text_edit` calls it unconditionally on an applied edit and records
   `LayoutPath::Incremental`. There is no preference gating it — the pass is
   repair, not layout — and `auto_layout_after_edit` is gone
   (`doc/design_incremental_layout.md`, open question 1).
@@ -245,7 +248,10 @@ result's `layout` section and copies into the AI edit log. Three rules:
   primitive call returns (`cascade`'s ids, `shift_half_plane`'s
   `ShiftOutcome` — both halves — `grow_rect`'s moves). The primitives
   themselves know nothing about causes; keep it that way.
-- **A new motion call in the pass must record a cause.** Forget it and the
+- **A new motion call in the pass must record a cause.** Statement calls
+  record `place` / `arrange` on their subjects and `push(dir)` on what they
+  moved, the direction read off the node's y (a split cascade goes both
+  ways); everything else records `grow` / `auto`. Forget it and the
   node is reported with no `cause`; `layout_test_support`'s `run()` and the
   corpus run both fail on that. The one call that must *not* record is
   `choose_cascade_dir`'s simulation, which restores what it moved.
@@ -254,6 +260,38 @@ result's `layout` section and copies into the AI edit log. Three rules:
   clearance, and new same-scope wires left backward. The oracle checks the
   overlap findings in both directions with its own overlap test, so do not
   make `check_overlap_findings` call `scope_findings`.
+
+## Step 2½: layout statements and the pinned set
+
+`doc/design_deliberate_node_placement.md` A2 / D6. The editor parses `place`,
+`arrange` and `straighten` but never applies them; `edit_network_with_layout`
+hands them back, `ai_text_edit` passes them on, and `placement.rs` runs each
+scope's statements between Step 2 and Step 3, in written order. Rules:
+
+- **It adds no motion.** A placed subject is put down and what it lands on is
+  cleared with `cascade` (no `push` → `choose_cascade_dir`; `up` / `down`), or
+  for `push right` with a half-plane shift whose `fixed` is the subject's
+  upstream closure — the same primitives, nothing new. Every check runs before
+  the first position is written, so a rejected statement moves nothing.
+- **Pinned = held in cascades, never `fixed` in a shift.** The pinned set (what
+  a statement placed or arranged, plus — after the last one — what it measured
+  against, `all` excluded) is the `fixed` argument of every later `cascade` and
+  the `hold` of `shift_half_plane_holding`, whose landing clean-up then never
+  pushes a pinned node vertically. Putting pinned nodes into a shift's `fixed`
+  would break the upstream-closure argument; a shift carries them with their
+  side instead. A new motion call after Step 2½ must take the pinned set.
+- **A statement's push ignores what its move did not newly reach**
+  (`motion::newly_collides`, both strictnesses), like `grow_rect`. Without it,
+  `place x at (<its own position>)` pushes every pre-existing overlap of `x`,
+  and the read-out's coordinates stop round-tripping (the corpus checks this).
+- **Step 6 also covers statement-handled nodes**: every same-scope wire
+  touching one, unless it ran backward before the edit, because such a node
+  never went through Step 4. This wins over the statement: a subject placed
+  right of a node it feeds has that node's side shifted past it, so its
+  horizontal relation flips. The statement oracle therefore assumes generated
+  relations run with the wires.
+- A scope with statements runs even when its delta is empty (`place x by …`
+  alone is an edit). A statement for a scope that never comes up is a warning.
 
 ## `hand_moved` is a tiebreaker, in exactly two places
 

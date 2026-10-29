@@ -262,6 +262,13 @@ ask for it explicitly with *Edit > Auto-Layout Network*. The
 [AI History panel](ui.md#ai-history-panel)'s **Layout** tab reports, per edit, exactly
 which nodes moved and how far — usually none.
 
+An edit can also say where things go, with
+[layout statements](../node_network_text_format.md#layout-statements): "put
+`n` under `h`, and push the rest of the column down", "straighten these wires".
+That is how an assistant follows what you told it about your arrangement —
+which group a node belongs to, which lane a branch lives in. Its moves appear in
+the Layout tab like any other, with the cause `place`, `arrange` or `push`.
+
 ## Cost model: how often a node is computed
 
 A node network is a graph, not a script, so "how many times does this run?" is a

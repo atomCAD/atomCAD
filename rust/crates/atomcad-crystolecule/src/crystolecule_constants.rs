@@ -55,7 +55,7 @@ BOND INTERIOR4 +..FACE_X
 "#;
 
 lazy_static! {
-    /// Default cubic zincblende motif used when no motif is connected to atom_fill node
+    /// Default cubic zincblende motif, used wherever no motif is supplied (e.g. the default diamond `Structure`)
     pub static ref DEFAULT_ZINCBLENDE_MOTIF: Motif = {
         parse_motif(DEFAULT_ZINCBLENDE_MOTIF_TEXT).expect("Failed to parse default zincblende motif")
     };

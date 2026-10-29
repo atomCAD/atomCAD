@@ -18,12 +18,12 @@
 //!
 //! **Pattern B: Hardcoded constant default**
 //! - The parameter has no matching property, but uses `evaluate_or_default()` in `eval()`
-//! - Example: `sphere` has parameter `unit_cell` with hardcoded default `UnitCellStruct::cubic_diamond()`
+//! - Example: `sphere` has parameter `structure` with hardcoded default `Structure::diamond()`
 //! - Must be documented via `get_parameter_metadata()` returning `(false, Some("description"))`
 //!
 //! **Pattern C: Required input**
 //! - The parameter uses `evaluate_arg_required()` in `eval()`
-//! - Example: `atom_fill` has parameter `shape` which must be wired
+//! - Example: `materialize` has parameter `shape` which must be wired
 //! - Must be documented via `get_parameter_metadata()` returning `(true, None)`
 //!
 //! ## Resolution Algorithm
@@ -54,7 +54,7 @@
 //!
 //! 2. **Have hardcoded defaults** (use `evaluate_or_default()` but no stored property):
 //!    ```ignore
-//!    m.insert("unit_cell".to_string(), (false, Some("cubic diamond".to_string())));
+//!    m.insert("structure".to_string(), (false, Some("diamond".to_string())));
 //!    ```
 //!
 //! 3. **Have different parameter vs property names**:
@@ -68,7 +68,7 @@
 //!
 //! Properties in `get_text_properties()` that have NO matching parameter are "literal-only":
 //! - They can only be set via text format, not via wire connections
-//! - Example: `parameter_element_value_definition` in `atom_fill`
+//! - Example: `parameter_element_value_definition` in `materialize`
 //! - These are displayed with the `[literal-only]` marker
 
 use std::collections::{HashMap, HashSet};
@@ -82,11 +82,15 @@ use crate::node_type_registry::NodeTypeRegistry;
 /// Dynamic types are used by nodes like `expr` and `parameter` where the actual type
 /// is determined at runtime based on configuration (e.g., expression validation or
 /// the selected data_type property).
+///
+/// A record named by the empty string is a placeholder for a record type the
+/// node's data has not chosen yet (`product` before its `target` is set); it
+/// is shown as `Record(<target>)` rather than the unreadable ``Record(``)``.
 fn format_data_type_for_display(dt: &DataType) -> String {
     match dt {
         DataType::None => "dynamic".to_string(),
         DataType::Array(inner) if matches!(**inner, DataType::None) => "[dynamic]".to_string(),
-        other => other.to_string(),
+        other => other.to_string().replace("Record(``)", "Record(<target>)"),
     }
 }
 
@@ -123,7 +127,7 @@ fn is_wire_only_type(data_type: &DataType) -> bool {
 /// # Terminology
 ///
 /// - **wire-only**: This input can only be connected to another node's output.
-///   There is no text literal representation for this type (e.g., Blueprint, Atomic, Motif).
+///   There is no text literal representation for this type (e.g., Blueprint, Motif, Structure).
 /// - **literal-only**: This input can only be set as a literal value in the text format.
 ///   It has no input pin and cannot be connected to other nodes.
 /// - Inputs without either marker can be set as a literal OR wired to another node.
@@ -137,18 +141,16 @@ fn is_wire_only_type(data_type: &DataType) -> bool {
 ///
 /// # Example Output
 /// ```text
-/// Node: atom_fill
-/// Category: AtomicStructure
-/// Description: Converts a 3D geometry into an atomic structure...
+/// Node: sphere
+/// Category: Geometry3D
+/// Description: Outputs the lattice image of a sphere...
 ///
 /// Inputs:
-///   shape          : Blueprint  [required, wire-only]
-///   motif          : Motif     [default: cubic zincblende, wire-only]
-///   m_offset       : Vec3      [default: (0.0, 0.0, 0.0)]
-///   passivate      : Bool      [default: true]
-///   element_values : String    [default: "", literal-only]
+///   center    : IVec3      [default: (0, 0, 0)]
+///   radius    : Int        [default: 1]
+///   structure : Structure  [default: diamond, wire-only]
 ///
-/// Output: Atomic
+/// Output: Blueprint
 /// ```
 pub fn describe_node_type(node_type_name: &str, registry: &NodeTypeRegistry) -> String {
     // Look up the node type
@@ -165,6 +167,12 @@ pub fn describe_node_type(node_type_name: &str, registry: &NodeTypeRegistry) -> 
     let default_data = (node_type.node_data_creator)();
     let text_props = default_data.get_text_properties();
     let param_metadata = default_data.get_parameter_metadata();
+    // Pins the text format takes a literal for although the fresh node stores
+    // no value for them (`collect.limit`, a `record_set` row).
+    let literal_keys: HashSet<String> = default_data
+        .text_literal_keys_with_defs(registry.record_defs())
+        .into_iter()
+        .collect();
 
     // Build a map of property name -> (inferred type, formatted value)
     let prop_map: HashMap<String, (String, String)> = text_props
@@ -240,9 +248,12 @@ pub fn describe_node_type(node_type_name: &str, registry: &NodeTypeRegistry) -> 
             // A parameter is wire-only if:
             // 1. Its data type has no literal representation (Blueprint, Atomic, etc.), OR
             // 2. It has no backing text property (no storage for literal values)
+            //    and is not one of the node's `text_literal_keys_with_defs`
             // BUT: Custom nodes can accept literals for all parameters (via CustomNodeData)
             let wire_only = is_wire_only_type(&param.data_type)
-                || (!prop_map.contains_key(&param.name) && !is_custom_node);
+                || (!prop_map.contains_key(&param.name)
+                    && !literal_keys.contains(&param.name)
+                    && !is_custom_node);
 
             // Determine default info from: 1) stored property, 2) parameter metadata, 3) fallback
             let default_info = if let Some((_, default_val)) = prop_map.get(&param.name) {

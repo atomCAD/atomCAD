@@ -706,6 +706,19 @@ impl NodeData for MechanosynthData {
     fn get_parameter_metadata(&self) -> HashMap<String, (bool, Option<String>)> {
         let mut metadata = HashMap::new();
         metadata.insert("base".to_string(), (true, None));
+        metadata.insert(
+            "ops".to_string(),
+            (false, Some("the deprecated ops_file property".to_string())),
+        );
+        metadata.insert(
+            "steps".to_string(),
+            (
+                false,
+                Some("the deprecated build_file property".to_string()),
+            ),
+        );
+        metadata.insert("feedstocks".to_string(), (false, Some("none".to_string())));
+        metadata.insert("tools".to_string(), (false, Some("none".to_string())));
         metadata
     }
 

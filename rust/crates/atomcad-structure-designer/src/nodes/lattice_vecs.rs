@@ -171,6 +171,19 @@ impl NodeData for LatticeVecsData {
         Box::new(self.clone())
     }
 
+    /// The basis-vector pins override the vectors derived from the stored cell
+    /// parameters; they have no property of their own.
+    fn get_parameter_metadata(&self) -> HashMap<String, (bool, Option<String>)> {
+        let mut m = HashMap::new();
+        for pin in ["a", "b", "c"] {
+            m.insert(
+                pin.to_string(),
+                (false, Some("from the cell parameters".to_string())),
+            );
+        }
+        m
+    }
+
     fn get_text_properties(&self) -> Vec<(String, TextValue)> {
         vec![
             (

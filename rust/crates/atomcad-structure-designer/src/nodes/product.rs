@@ -195,17 +195,17 @@ pub fn get_node_type() -> NodeType {
     NodeType {
         name: "product".to_string(),
         description:
-            "Cartesian product of N input arrays, one per field of the chosen record type def. \
-            Each input pin is `Array[FieldType_i]`; the output is \
-            `Array[Record(target)]`. Iteration order: rightmost field varies fastest. \
-            If any input array is empty, the output is empty."
+            "Cartesian product of N input streams, one per field of the record type def named \
+            by `target`. Each input pin is `Iter[FieldType_i]`; the output is \
+            `Iter[Record(target)]`. Iteration order: rightmost field varies fastest. \
+            If any input stream is empty, the output is empty."
                 .to_string(),
         summary: Some("Cartesian product into records".to_string()),
         category: NodeTypeCategory::MathAndProgramming,
         // Base parameters/pins are placeholders; the registry-aware cache
-        // populator replaces them with per-field Array pins keyed off `target`.
+        // populator replaces them with per-field Iter pins keyed off `target`.
         parameters: vec![],
-        output_pins: OutputPinDefinition::single_fixed(DataType::Array(Box::new(
+        output_pins: OutputPinDefinition::single_fixed(DataType::Iterator(Box::new(
             DataType::Record(RecordType::Named(String::new())),
         ))),
         zone_input_pins: vec![],

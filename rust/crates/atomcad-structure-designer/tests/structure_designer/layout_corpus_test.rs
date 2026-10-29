@@ -36,6 +36,18 @@
 //! oracle checks the overlap findings in both directions, measuring overlaps
 //! itself.
 //!
+//! # Statement scripts (`doc/design_deliberate_node_placement.md` Phase 5)
+//!
+//! The `Stmt*` kinds generate layout statements — every clause form, every
+//! `push`, `at` (from the node's own rounded box), `by`, `all`, a group,
+//! `arrange`, `straighten` and a deleted target — and each edit is
+//! additionally held to the statement oracle (`check_statements`). An `at`
+//! of a node's own rounded position must move it at most 0.5 px and move
+//! nothing else: the read-out and the statements share one coordinate system.
+//! [`at_least_one_edit_of_every_kind_lands`] also requires every statement
+//! kind to land somewhere **without a warning**; `push right` is the one to
+//! watch, since it shifts real hand-drawn chains.
+//!
 //! # What a failure here means, and what to do with it
 //!
 //! The panic names the network, the edit and the invariant. Reproduce it as a
@@ -51,7 +63,9 @@ use atomcad_structure_designer::layout::FindingKind;
 use atomcad_structure_designer::node_network::NodeNetwork;
 use atomcad_structure_designer::serialization::node_networks_serialization::serialize_registry_to_string;
 use atomcad_structure_designer::structure_designer::StructureDesigner;
-use atomcad_structure_designer::text_format::NamePath;
+use atomcad_structure_designer::text_format::{
+    NamePath, Parser, ScopedLayoutStatement, Statement, format_identifier,
+};
 
 use super::layout_oracle::{self, Drawing};
 use super::layout_test_support::touched_between;
@@ -173,16 +187,93 @@ enum EditKind {
     /// A fresh unwired node inside a random HOF body: the inside-out driver,
     /// and the HOF footprint growth it feeds to the parent scope (D12).
     AddInBody,
+    /// `place` with a relation: a lone direction, a direction with an edge,
+    /// `gap` / `dx` / `dy`, or `straight_to` on a probe feeding its target.
+    StmtRelation,
+    /// `place … below X push down`.
+    StmtPushDown,
+    /// `place … above X push up`.
+    StmtPushUp,
+    /// `place … right_of X push right`: shifts real chains.
+    StmtPushRight,
+    /// `place X at (x, y)` at X's own rounded box: moves nothing else.
+    StmtAt,
+    /// `place X by (0, 40)`.
+    StmtBy,
+    /// `place [X, Y] by (210, 0)`.
+    StmtByList,
+    /// `place … below all` / `right_of all`.
+    StmtAll,
+    /// `place [p, q] column … push down` / `row …`.
+    StmtGroup,
+    /// `arrange [source, consumer]`.
+    StmtArrange,
+    /// `straighten [consumer]`.
+    StmtStraighten,
+    /// `delete V` and a placement measured against `V`'s old box.
+    StmtDeletedTarget,
 }
 
 impl EditKind {
-    const ALL: [EditKind; 5] = [
+    const ALL: [EditKind; 17] = [
         EditKind::AddUnwired,
         EditKind::AddWired,
         EditKind::DeleteNode,
         EditKind::AddAnchoredComment,
         EditKind::AddInBody,
+        EditKind::StmtRelation,
+        EditKind::StmtPushDown,
+        EditKind::StmtPushUp,
+        EditKind::StmtPushRight,
+        EditKind::StmtAt,
+        EditKind::StmtBy,
+        EditKind::StmtByList,
+        EditKind::StmtAll,
+        EditKind::StmtGroup,
+        EditKind::StmtArrange,
+        EditKind::StmtStraighten,
+        EditKind::StmtDeletedTarget,
     ];
+
+    /// Whether the kind's scripts carry layout statements.
+    fn is_statement(self) -> bool {
+        !matches!(
+            self,
+            EditKind::AddUnwired
+                | EditKind::AddWired
+                | EditKind::DeleteNode
+                | EditKind::AddAnchoredComment
+                | EditKind::AddInBody
+        )
+    }
+}
+
+/// `(source, consumer)` names of every same-scope wire in `network`, sorted.
+fn wired_pairs(network: &NodeNetwork) -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    for node in network.nodes.values() {
+        let Some(consumer) = node.custom_name.clone() else {
+            continue;
+        };
+        for argument in &node.arguments {
+            for wire in &argument.incoming_wires {
+                if wire.source_scope_depth != 0 || wire.source_node_id == node.id {
+                    continue;
+                }
+                let Some(source) = network
+                    .nodes
+                    .get(&wire.source_node_id)
+                    .and_then(|n| n.custom_name.clone())
+                else {
+                    continue;
+                };
+                out.push((source, consumer.clone()));
+            }
+        }
+    }
+    out.sort();
+    out.dedup();
+    out
 }
 
 /// The names of a scope's nodes, sorted — the pool every generator draws from.
@@ -263,7 +354,9 @@ fn script_for(
     // A name no corpus node can collide with, so the edit is always a creation
     // and never an accidental in-place update.
     const PROBE: &str = "zz_layout_probe";
+    const PROBE2: &str = "zz_layout_probe2";
     let names = node_names(network);
+    let q = |name: &str| format_identifier(name).into_owned();
 
     match kind {
         EditKind::AddUnwired => Some(format!("{PROBE} = int {{ value: 7 }}\n")),
@@ -288,7 +381,129 @@ fn script_for(
             let hof = rng.pick(&bodies(network))?.clone();
             Some(format!("{hof}/{PROBE} = int {{ value: 7 }}\n"))
         }
+        EditKind::StmtRelation => {
+            let x = q(rng.pick(&names)?);
+            let probe = format!("{PROBE} = int {{ value: 7 }}\n");
+            let pins = free_scalar_pins(network, sd);
+            match rng.below(6) {
+                0 => Some(format!("{probe}place {PROBE} right_of {x}\n")),
+                1 => Some(format!("{probe}place {PROBE} below {x}\n")),
+                2 => Some(format!("{probe}place {PROBE} above {x} (gap: tight)\n")),
+                3 => Some(format!(
+                    "{probe}place {PROBE} right_of {x}, bottom_even_with {x}\n"
+                )),
+                // The probe feeds its target, so the relation runs with the wire.
+                variant => {
+                    let Some((node, node_type, pin, literal)) = rng.pick(&pins).cloned() else {
+                        return Some(format!("{probe}place {PROBE} below {x}\n"));
+                    };
+                    let (node, node_type) = (q(&node), q(&node_type));
+                    let clause = if variant == 4 {
+                        format!("left_of {node}, straight_to {node}")
+                    } else {
+                        format!("left_of {node} (gap: wide, dy: 10)")
+                    };
+                    Some(format!(
+                        "{PROBE} = {literal} {{ value: 1 }}\n{node} = {node_type} {{ {pin}: {PROBE} }}\nplace {PROBE} {clause}\n"
+                    ))
+                }
+            }
+        }
+        EditKind::StmtPushDown => {
+            let x = q(rng.pick(&names)?);
+            Some(format!(
+                "{PROBE} = int {{ value: 7 }}\nplace {PROBE} below {x} push down\n"
+            ))
+        }
+        EditKind::StmtPushUp => {
+            let x = q(rng.pick(&names)?);
+            Some(format!(
+                "{PROBE} = int {{ value: 7 }}\nplace {PROBE} above {x} push up\n"
+            ))
+        }
+        EditKind::StmtPushRight => {
+            let x = q(rng.pick(&names)?);
+            Some(format!(
+                "{PROBE} = int {{ value: 7 }}\nplace {PROBE} right_of {x} push right\n"
+            ))
+        }
+        EditKind::StmtAt => {
+            let name = rng.pick(&names)?.clone();
+            let node = network
+                .nodes
+                .values()
+                .find(|n| n.custom_name.as_deref() == Some(name.as_str()))?;
+            Some(format!(
+                "place {} at ({}, {})\n",
+                q(&name),
+                node.position.x.round(),
+                node.position.y.round()
+            ))
+        }
+        EditKind::StmtBy => {
+            let x = q(rng.pick(&names)?);
+            Some(format!("place {x} by (0, 40)\n"))
+        }
+        EditKind::StmtByList => {
+            let x = rng.pick(&names)?.clone();
+            let others: Vec<String> = names.iter().filter(|n| **n != x).cloned().collect();
+            let y = rng.pick(&others)?;
+            Some(format!("place [{}, {}] by (210, 0)\n", q(&x), q(y)))
+        }
+        EditKind::StmtAll => {
+            let clause = if rng.below(2) == 0 {
+                "below all"
+            } else {
+                "right_of all"
+            };
+            Some(format!(
+                "{PROBE} = int {{ value: 7 }}\nplace {PROBE} {clause}\n"
+            ))
+        }
+        EditKind::StmtGroup => {
+            let x = q(rng.pick(&names)?);
+            let place = if rng.below(2) == 0 {
+                format!("place [{PROBE}, {PROBE2}] column below {x} push down")
+            } else {
+                format!("place [{PROBE}, {PROBE2}] row (gap: tight) right_of {x}")
+            };
+            Some(format!(
+                "{PROBE} = int {{ value: 7 }}\n{PROBE2} = int {{ value: 8 }}\n{place}\n"
+            ))
+        }
+        EditKind::StmtArrange => {
+            let (source, consumer) = rng.pick(&wired_pairs(network))?.clone();
+            Some(format!("arrange [{}, {}]\n", q(&source), q(&consumer)))
+        }
+        EditKind::StmtStraighten => {
+            let (_, consumer) = rng.pick(&wired_pairs(network))?.clone();
+            Some(format!("straighten [{}]\n", q(&consumer)))
+        }
+        EditKind::StmtDeletedTarget => {
+            let v = q(rng.pick(&names)?);
+            Some(format!(
+                "delete {v}\n{PROBE} = int {{ value: 7 }}\nplace {PROBE} left_even_with {v}, top_even_with {v}\n"
+            ))
+        }
     }
+}
+
+/// The layout statements of a top-level script, as the editor hands them on.
+fn statements_of(script: &str) -> Vec<ScopedLayoutStatement> {
+    Parser::parse(script)
+        .map(|statements| {
+            statements
+                .into_iter()
+                .filter_map(|statement| match statement {
+                    Statement::Layout(statement) => Some(ScopedLayoutStatement {
+                        scope: Vec::new(),
+                        statement,
+                    }),
+                    _ => None,
+                })
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 // ============================================================================
@@ -299,6 +514,9 @@ fn script_for(
 struct RunStats {
     /// Edits that parsed and landed, per kind.
     applied: HashMap<EditKind, usize>,
+    /// Edits that landed with no layout warning, per kind: a statement that
+    /// was carried out as written.
+    clean: HashMap<EditKind, usize>,
     /// Edits the editor refused (a type rule, a name the network does not have
     /// after an earlier deletion, …). Not a failure — the generator is blind.
     refused: usize,
@@ -313,6 +531,7 @@ impl RunStats {
     fn new() -> Self {
         Self {
             applied: EditKind::ALL.iter().map(|&k| (k, 0)).collect(),
+            clean: EditKind::ALL.iter().map(|&k| (k, 0)).collect(),
             refused: 0,
             networks: 0,
             reported_moves: 0,
@@ -354,6 +573,7 @@ fn run_corpus(path: &Path, seed: u64) -> RunStats {
                 continue;
             };
             let before = Drawing::of(network, &sd.node_type_registry);
+            let before_positions = layout_oracle::node_paths(network);
 
             // The preview first, on the same load: it must leave the design
             // exactly as it found it.
@@ -421,7 +641,16 @@ fn run_corpus(path: &Path, seed: u64) -> RunStats {
             // The report: the log's diff with a cause on every entry, present
             // exactly when there is something to say.
             let report = outcome.layout.clone().unwrap_or_default();
-            if outcome.layout.is_some() {
+            if report.warnings.is_empty() {
+                *stats.clean.get_mut(&kind).expect("seeded") += 1;
+            }
+            if kind.is_statement() {
+                assert!(
+                    outcome.layout.is_some(),
+                    "an edit with statements reported no `layout`\n{}",
+                    context()
+                );
+            } else if outcome.layout.is_some() {
                 assert!(
                     !report.moved.is_empty() || !report.findings.is_empty(),
                     "an empty `layout` was reported\n{}",
@@ -452,11 +681,32 @@ fn run_corpus(path: &Path, seed: u64) -> RunStats {
                 .map(|f| (f.nodes[0].clone(), f.nodes[1].clone()))
                 .collect();
 
-            let touched = touched_between(&before, &after, moved);
+            let touched = touched_between(&before, &after, moved.clone());
+            let statements = statements_of(&script);
             // `catch_unwind` only to attach the context; the panic is re-raised.
             let checked = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                layout_oracle::check(&before, &after, &touched);
+                // Invariant 1 is the overlap-findings form: a statement may
+                // pin a node onto another, and then the report must say so.
                 layout_oracle::check_overlap_findings(&before, &after, &overlap_findings);
+                layout_oracle::check_no_wire_flipped(&before, &after);
+                layout_oracle::check_untouched_unmoved(&before, &after, &touched);
+                layout_oracle::check_bodies(&after);
+                layout_oracle::check_statements(&statements, &report, &before, &after, network);
+                if kind == EditKind::StmtAt && report.warnings.is_empty() {
+                    // The read-out's own numbers round-trip: at most 0.5 px,
+                    // and nothing else moves.
+                    let now = layout_oracle::node_paths(network);
+                    for (path, was) in &before_positions {
+                        let Some(is) = now.get(path) else { continue };
+                        let d = (*is - *was).abs();
+                        if moved.contains(path) {
+                            assert!(d.x <= 0.5 && d.y <= 0.5, "{} moved {d:?}", path.join("/"));
+                        } else {
+                            assert_eq!(is, was, "{} moved", path.join("/"));
+                        }
+                    }
+                    assert!(moved.len() <= 1, "`at` its own box moved others: {moved:?}");
+                }
             }));
             if let Err(payload) = checked {
                 let message = payload
@@ -509,6 +759,13 @@ fn at_least_one_edit_of_every_kind_lands() {
             "no `{kind:?}` edit landed anywhere in the corpus; the generator has \
              stopped producing valid scripts for it"
         );
+        if kind.is_statement() {
+            assert!(
+                stats.clean[&kind] > 0,
+                "no `{kind:?}` statement was carried out without a warning anywhere \
+                 in the corpus; the form never really ran"
+            );
+        }
     }
 }
 

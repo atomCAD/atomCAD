@@ -845,6 +845,12 @@ impl NodeData for MechanosynthEditData {
         let mut metadata = HashMap::new();
         metadata.insert("base".to_string(), (true, None));
         metadata.insert("ops".to_string(), (true, None));
+        metadata.insert(
+            "steps".to_string(),
+            (false, Some("none (only the authored block)".to_string())),
+        );
+        metadata.insert("feedstocks".to_string(), (false, Some("none".to_string())));
+        metadata.insert("tools".to_string(), (false, Some("none".to_string())));
         metadata
     }
 

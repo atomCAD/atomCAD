@@ -6,7 +6,7 @@ use crate::node_data::{EvalOutput, NodeData};
 use crate::node_network_gadget::NodeNetworkGadget;
 use crate::node_type::NodeTypeCategory;
 use crate::node_type::{NodeType, OutputPinDefinition, Parameter};
-use crate::node_type_registry::NodeTypeRegistry;
+use crate::node_type_registry::{NodeTypeRegistry, RecordDefs};
 use crate::structure_designer::StructureDesigner;
 use crate::text_format::TextValue;
 use atomcad_crystolecule::atomic_structure::AtomicStructure;
@@ -189,6 +189,41 @@ impl NodeData for ImportCifData {
         } else {
             self.file_name.clone()
         }
+    }
+
+    /// Every property is written only when it differs from the default, so a
+    /// fresh node lists none; without this the text format would read all five
+    /// pins as wire-only and drop their literals.
+    fn text_literal_keys_with_defs(&self, _defs: RecordDefs<'_>) -> Vec<String> {
+        [
+            "file_name",
+            "block_name",
+            "use_cif_bonds",
+            "infer_bonds",
+            "bond_tolerance",
+        ]
+        .iter()
+        .map(|s| s.to_string())
+        .collect()
+    }
+
+    fn get_parameter_metadata(&self) -> HashMap<String, (bool, Option<String>)> {
+        let mut m = HashMap::new();
+        m.insert("file_name".to_string(), (true, None));
+        m.insert(
+            "block_name".to_string(),
+            (false, Some("the first data block".to_string())),
+        );
+        m.insert(
+            "use_cif_bonds".to_string(),
+            (false, Some("true".to_string())),
+        );
+        m.insert("infer_bonds".to_string(), (false, Some("true".to_string())));
+        m.insert(
+            "bond_tolerance".to_string(),
+            (false, Some("1.15".to_string())),
+        );
+        m
     }
 
     fn get_text_properties(&self) -> Vec<(String, TextValue)> {
@@ -525,7 +560,7 @@ fn add_cif_bonds_to_structure(
 
         if let (Some((site1, cell1)), Some((site2, cell2))) = (idx1, idx2) {
             // Only add bonds between atoms in the same cell (cell offset 0,0,0)
-            // Cross-cell bonds in the Atomic output are handled by the motif + atom_fill pipeline
+            // Cross-cell bonds in the Atomic output are handled by the motif + materialize pipeline
             if cell1 == glam::IVec3::ZERO && cell2 == glam::IVec3::ZERO {
                 let num_atoms = expanded_atoms.len();
                 if site1 < num_atoms && site2 < num_atoms {

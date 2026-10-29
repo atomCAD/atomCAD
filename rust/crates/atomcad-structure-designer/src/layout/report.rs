@@ -27,14 +27,20 @@ use crate::layout::delta::WireKey;
 use crate::layout::motion::{GAP, Rect, upstream_closure};
 use crate::node_layout::nodes_overlap;
 use crate::node_network::NodeNetwork;
-use crate::text_format::{NamePath, PositionSnapshot, unique_node_names};
+use crate::text_format::{NamePath, PositionSnapshot, PushDir, unique_node_names};
 
 /// Why an existing node moved.
 ///
-/// Only the two causes the automatic pass can produce exist yet. `place`,
-/// `arrange` and `push` arrive with the layout statements (Phase 5).
+/// The first three are asked for by the AI's layout statements (Step 2½); the
+/// last two are the automatic pass's own.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum MoveCause {
+    /// A `place` statement positioned this existing node.
+    Place,
+    /// An `arrange` / `straighten` statement listed it.
+    Arrange,
+    /// A placed or arranged node landed on it, and it went this way.
+    Push(PushDir),
     /// A node this edit enlarged pushed it (Step 2).
     Grow,
     /// The safety net: room for a node nobody placed, a backward-wire repair,
@@ -43,11 +49,23 @@ pub enum MoveCause {
 }
 
 impl MoveCause {
-    /// The word the report and the history log use.
+    /// The word the report and the history log use. A push's direction is
+    /// reported separately ([`MoveCause::push_dir`]).
     pub fn as_str(self) -> &'static str {
         match self {
+            MoveCause::Place => "place",
+            MoveCause::Arrange => "arrange",
+            MoveCause::Push(_) => "push",
             MoveCause::Grow => "grow",
             MoveCause::Auto => "auto",
+        }
+    }
+
+    /// Which way a `push` went, `None` for every other cause.
+    pub fn push_dir(self) -> Option<PushDir> {
+        match self {
+            MoveCause::Push(dir) => Some(dir),
+            _ => None,
         }
     }
 }
@@ -102,8 +120,13 @@ impl LayoutMove {
         let cause = first.map(|(cause, _)| *cause);
         let why = first.map(|(_, why)| why.clone()).unwrap_or_default();
         let mut also: Vec<MoveCause> = Vec::new();
+        // `also` names *causes*, so two pushes in different directions are
+        // one `push`.
+        let same = |a: &MoveCause, b: &MoveCause| a.as_str() == b.as_str();
         for (later, _) in causes.iter().skip(1) {
-            if Some(*later) != cause && also.last() != Some(later) {
+            if !cause.is_some_and(|c| same(&c, later))
+                && !also.last().is_some_and(|last| same(last, later))
+            {
                 also.push(*later);
             }
         }
@@ -155,11 +178,9 @@ pub struct Finding {
     pub message: String,
 }
 
-/// A layout statement that parsed but could not be carried out.
-///
-/// Statements arrive in Phase 5; until then this list is always empty, but it
-/// is part of the report's shape from the start so an AI reading the JSON
-/// sees the field it will later be told about.
+/// A layout statement that parsed but could not be carried out (D8): dropped,
+/// or — a negative body coordinate — applied after a clamp. `fallback` says
+/// what happened instead.
 #[derive(Debug, Clone, PartialEq)]
 pub struct LayoutWarning {
     pub line: usize,
@@ -171,26 +192,36 @@ pub struct LayoutWarning {
 /// The `layout` section of an edit result.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct LayoutReport {
+    /// Every node a `place` statement positioned, new or existing, with its
+    /// final box, sorted by path. An existing one is also in `moved`.
+    pub placed: Vec<PlacedBox>,
     /// Every new node the incremental rules positioned, sorted by path.
     pub auto_placed: Vec<PlacedBox>,
     /// Every existing node whose position changed, sorted by path.
     pub moved: Vec<LayoutMove>,
     pub findings: Vec<Finding>,
     pub warnings: Vec<LayoutWarning>,
+    /// How many layout statements the edit had. Not serialized: it only
+    /// decides whether there is a report at all.
+    pub statements: usize,
 }
 
 impl LayoutReport {
     /// Whether the edit result should carry a `layout` key at all: an existing
-    /// node moved, or a finding or warning arose. (From Phase 5 also: the edit
-    /// had layout statements.) An edit that leaves the drawing alone says
-    /// nothing about layout.
+    /// node moved, a finding or warning arose, or the edit had layout
+    /// statements. An edit that leaves the drawing alone says nothing about
+    /// layout.
     pub fn is_worth_reporting(&self) -> bool {
-        !self.moved.is_empty() || !self.findings.is_empty() || !self.warnings.is_empty()
+        !self.moved.is_empty()
+            || !self.findings.is_empty()
+            || !self.warnings.is_empty()
+            || self.statements > 0
     }
 
     /// Sort every list into its canonical order (by path), so two runs over the
     /// same edit produce identical JSON.
     pub fn sort(&mut self) {
+        self.placed.sort_by(|a, b| a.path.cmp(&b.path));
         self.auto_placed.sort_by(|a, b| a.path.cmp(&b.path));
         self.moved.sort_by(|a, b| a.path.cmp(&b.path));
         self.findings.sort_by(|a, b| {
@@ -199,6 +230,7 @@ impl LayoutReport {
                 .cmp(b.kind.as_str())
                 .then_with(|| a.nodes.cmp(&b.nodes))
         });
+        self.warnings.sort_by_key(|warning| warning.line);
     }
 
     /// The JSON the edit result carries under `layout`. Coordinates are whole
@@ -206,21 +238,23 @@ impl LayoutReport {
     /// `findings` and `warnings`, which are always present.
     pub fn to_json(&self) -> Value {
         let mut out = serde_json::Map::new();
-        if !self.auto_placed.is_empty() {
-            out.insert(
-                "auto_placed".into(),
-                Value::Array(
-                    self.auto_placed
-                        .iter()
-                        .map(|placed| {
-                            json!({
-                                "node": placed.path.join("/"),
-                                "box": box_json(placed.rect),
-                            })
+        let boxes = |list: &[PlacedBox]| {
+            Value::Array(
+                list.iter()
+                    .map(|placed| {
+                        json!({
+                            "node": placed.path.join("/"),
+                            "box": box_json(placed.rect),
                         })
-                        .collect(),
-                ),
-            );
+                    })
+                    .collect(),
+            )
+        };
+        if !self.placed.is_empty() {
+            out.insert("placed".into(), boxes(&self.placed));
+        }
+        if !self.auto_placed.is_empty() {
+            out.insert("auto_placed".into(), boxes(&self.auto_placed));
         }
         if !self.moved.is_empty() {
             out.insert(
@@ -287,6 +321,9 @@ fn move_json(moved: &LayoutMove) -> Value {
     entry.insert("to".into(), point_json(moved.to));
     if let Some(cause) = moved.cause {
         entry.insert("cause".into(), json!(cause.as_str()));
+        if let Some(dir) = cause.push_dir() {
+            entry.insert("dir".into(), json!(dir.as_str()));
+        }
     }
     entry.insert("why".into(), json!(moved.why));
     if !moved.also.is_empty() {

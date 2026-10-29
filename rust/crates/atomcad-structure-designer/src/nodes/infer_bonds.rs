@@ -10,7 +10,7 @@ use crate::node_type::NodeTypeCategory;
 use crate::node_type::{
     NodeType, OutputPinDefinition, Parameter, generic_node_data_loader, generic_node_data_saver,
 };
-use crate::node_type_registry::NodeTypeRegistry;
+use crate::node_type_registry::{NodeTypeRegistry, RecordDefs};
 use crate::structure_designer::StructureDesigner;
 use crate::text_format::TextValue;
 use crate::trace::{
@@ -235,7 +235,19 @@ impl NodeData for InferBondsData {
         let mut m = std::collections::HashMap::new();
         m.insert("molecule".to_string(), (true, None));
         m.insert("region".to_string(), (false, None)); // optional
+        m.insert("additive".to_string(), (false, Some("false".to_string())));
+        m.insert(
+            "bond_tolerance".to_string(),
+            (false, Some("1.15".to_string())),
+        );
         m
+    }
+
+    /// Both are written only when they differ from the default, so a fresh
+    /// node lists neither; without this the text format would read both pins
+    /// as wire-only and drop their literals.
+    fn text_literal_keys_with_defs(&self, _defs: RecordDefs<'_>) -> Vec<String> {
+        vec!["additive".to_string(), "bond_tolerance".to_string()]
     }
 }
 

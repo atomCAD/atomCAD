@@ -45,6 +45,7 @@ pub mod common;
 pub mod delta;
 pub mod incremental;
 pub mod motion;
+pub mod placement;
 pub mod readout;
 pub mod report;
 pub mod size;
@@ -59,12 +60,12 @@ pub use delta::{
     node_ids_by_path, scopes_inside_out,
 };
 pub use incremental::{
-    Block, BodyFrame, IncrementalOutcome, SLIDE_WINDOW, ScopeMove, layout_incremental,
-    layout_scope, repair_grown,
+    Block, BodyFrame, IncrementalOutcome, SLIDE_WINDOW, ScopeMove, ScopeOutcome,
+    layout_incremental, layout_incremental_with_statements, layout_scope, repair_grown,
 };
 pub use motion::{
     CascadeDir, Rect, ShiftOutcome, cascade, grow_rect, measure_scope, shift_half_plane,
-    snap_shift_line, upstream_closure,
+    shift_half_plane_holding, snap_shift_line, upstream_closure,
 };
 pub use readout::{ReadoutFilter, layout_readout, parse_readout_args};
 pub use report::{

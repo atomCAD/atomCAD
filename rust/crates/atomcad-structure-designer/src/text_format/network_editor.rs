@@ -64,7 +64,7 @@ use crate::nodes::comment::{ANCHOR_PROPERTY, CommentAnchor, CommentData};
 use crate::nodes::parameter::ParameterData;
 use crate::text_format::TextValue;
 use crate::text_format::auto_layout;
-use crate::text_format::{Parser, PropertyValue, Statement};
+use crate::text_format::{LayoutStatement, Parser, PropertyValue, Statement};
 
 /// The chain of zone-owning node ids from the top-level network down to a
 /// body. Empty is the top-level network itself.
@@ -113,6 +113,15 @@ pub struct NodeLayoutState {
 /// `(name path) -> layout state` over a whole network, bodies included. The one
 /// identity map two designs share — see [`snapshot_node_positions`].
 pub type PositionSnapshot = HashMap<NamePath, NodeLayoutState>;
+
+/// A layout statement together with the scope it was written in: the name
+/// path of the HOF chain whose `body { … }` block holds it, empty at the top
+/// level. Its node names are relative to that scope.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ScopedLayoutStatement {
+    pub scope: NamePath,
+    pub statement: LayoutStatement,
+}
 
 /// Record `(name path) → position` for every node in `network`, including
 /// every node nested in a zone body at any depth.
@@ -510,6 +519,11 @@ pub struct NetworkEditor<'a> {
     pending_pin_roles: Vec<PendingPinRoles>,
     /// `delete` / `output` statements, in source order.
     deferred: Vec<DeferredOp>,
+    /// The layout statements, in written order, each with the scope it was
+    /// written in. The editor does not apply them: they are handed back to
+    /// the caller for the layout pass (`doc/design_deliberate_node_placement.md`
+    /// A2).
+    layout_statements: Vec<ScopedLayoutStatement>,
     /// Pre-edit `(name path) → position`, taken in Pass 0 (D8).
     positions: PositionSnapshot,
     /// Result tracking
@@ -531,6 +545,7 @@ impl<'a> NetworkEditor<'a> {
             pending_anchors: Vec::new(),
             pending_pin_roles: Vec::new(),
             deferred: Vec::new(),
+            layout_statements: Vec::new(),
             positions: HashMap::new(),
             result: EditResult::new(),
         }
@@ -544,13 +559,25 @@ impl<'a> NetworkEditor<'a> {
     ///
     /// # Returns
     /// An `EditResult` describing what was changed.
-    pub fn apply(mut self, code: &str, replace: bool) -> EditResult {
+    pub fn apply(self, code: &str, replace: bool) -> EditResult {
+        self.apply_with_layout(code, replace).0
+    }
+
+    /// [`apply`](Self::apply), also handing back the script's layout
+    /// statements (`place`, `arrange`, `straighten`) for the layout pass. The
+    /// editor itself never acts on them, and a script that fails to parse
+    /// returns none — a grammar error in one rejects the whole edit (D8).
+    pub fn apply_with_layout(
+        mut self,
+        code: &str,
+        replace: bool,
+    ) -> (EditResult, Vec<ScopedLayoutStatement>) {
         // Step 1: Parse input
         let statements = match Parser::parse(code) {
             Ok(stmts) => stmts,
             Err(e) => {
                 self.result.add_error(format!("Parse error: {}", e));
-                return self.result;
+                return (self.result, Vec::new());
             }
         };
 
@@ -597,7 +624,7 @@ impl<'a> NetworkEditor<'a> {
         self.registry
             .update_apply_pin_layouts_for_network_preserving_args(self.network);
 
-        self.result
+        (self.result, self.layout_statements)
     }
 
     // ------------------------------------------------------------------
@@ -725,6 +752,12 @@ impl<'a> NetworkEditor<'a> {
                     }
                 }
                 Statement::Comment(_) => {}
+                Statement::Layout(statement) => {
+                    self.layout_statements.push(ScopedLayoutStatement {
+                        scope: name_path.to_vec(),
+                        statement: statement.clone(),
+                    });
+                }
                 Statement::Delete {
                     scope_path,
                     node_name,
@@ -2771,6 +2804,18 @@ pub fn edit_network(
 ) -> EditResult {
     let editor = NetworkEditor::new(network, registry);
     editor.apply(code, replace)
+}
+
+/// [`edit_network`], also returning the script's layout statements for the
+/// layout pass ([`NetworkEditor::apply_with_layout`]).
+pub fn edit_network_with_layout(
+    network: &mut NodeNetwork,
+    registry: &NodeTypeRegistry,
+    code: &str,
+    replace: bool,
+) -> (EditResult, Vec<ScopedLayoutStatement>) {
+    let editor = NetworkEditor::new(network, registry);
+    editor.apply_with_layout(code, replace)
 }
 
 /// The current lane count of a `zip_with` node, `None` for any other node.

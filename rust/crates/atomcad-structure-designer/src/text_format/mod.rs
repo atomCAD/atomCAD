@@ -48,10 +48,15 @@ mod text_value;
 
 pub use network_editor::{
     EditResult, NamePath, NetworkEditor, NodeLayoutState, PIN_ROLES_PROPERTY, PositionSnapshot,
-    edit_network, snapshot_node_positions, unique_node_names,
+    ScopedLayoutStatement, edit_network, edit_network_with_layout, snapshot_node_positions,
+    unique_node_names,
 };
 pub use network_serializer::{NetworkSerializer, format_identifier, serialize_network};
 pub use node_type_introspection::{describe_node_type, get_display_summary, truncate_description};
-pub use parser::{Lexer, ParseError, Parser, PropertyValue, Statement, Token, TokenInfo};
+pub use parser::{
+    GroupKind, LAYOUT_STATEMENT_HEADS, LayoutClause, LayoutDirection, LayoutEdge, LayoutNodeRef,
+    LayoutOp, LayoutStatement, LayoutSubject, LayoutTargets, Lexer, ParseError, Parser, PlaceSpec,
+    PropertyValue, PushDir, Statement, Token, TokenInfo,
+};
 pub use serializer::{TextFormatter, format_float};
 pub use text_value::TextValue;

@@ -77,8 +77,11 @@ given a `body` block or has a function wired into its `f:` pin — so
 
 An edit fits its new nodes into the existing drawing and leaves everything else
 where it is ([Where nodes end up](node_networks.md#where-nodes-end-up-your-arrangement-and-what-may-move-it)).
-When that does move a node that was already there, or leaves a problem behind,
-the result says so under `layout`:
+An edit can also say where things go itself, with
+[layout statements](../node_network_text_format.md#layout-statements) —
+`place n below h push down`, `straighten [a, b]`. When an edit moves a node
+that was already there, leaves a problem behind, or contains layout
+statements, the result says so under `layout`:
 
 ```json
 "layout": {
@@ -94,10 +97,11 @@ the result says so under `layout`:
 
 | Field | Content |
 |---|---|
-| `auto_placed` | every node the edit created, with the box it landed in: `[x, y, width, height]`. This is how a script learns the real size of what it made, without querying again. |
+| `placed` | every node a `place` statement positioned, new or existing, with the box it ended in: `[x, y, width, height]` |
+| `auto_placed` | every other node the edit created, with the box it landed in. This is how a script learns the real size of what it made, without querying again. |
 | `moved` | every node that existed before the edit and whose position changed: `from` and `to`, the `cause` of its first move and a short `why`. If it moved again for another reason, `also` lists those causes in order. |
 | `findings` | problems the edit created and nothing repaired, one line each (below) |
-| `warnings` | always empty for now |
+| `warnings` | layout statements that could not be carried out: `line`, `statement`, `problem`, and the `fallback` that happened instead |
 
 Coordinates are canvas pixels — x to the right, y **down** — and a position is a
 node's top-left corner. A node inside a higher-order function's body has body
@@ -108,6 +112,9 @@ everywhere else in the result. Values are rounded to whole pixels.
 
 | `cause` | The node moved because… |
 |---|---|
+| `place` | a `place` statement put it there |
+| `arrange` | an `arrange` or `straighten` statement listed it |
+| `push` | a placed or arranged node landed on it; `dir` says which way it went (`up`, `down`, `right`). The `why` names the statement's line. |
 | `grow` | a node this edit made bigger (a new pin, a fuller body) pushed it |
 | `auto` | room had to be made for a new node, a new wire had to be kept running left to right, or a comment followed its anchor back |
 
@@ -116,12 +123,12 @@ backward wires your drawing already had are left alone and never reported.
 
 | `kind` | Reported when |
 |---|---|
-| `overlap` | two nodes overlap after the edit and did not before |
+| `overlap` | two nodes overlap after the edit and did not before (only possible where a layout statement put a node, since everything else is pushed clear) |
 | `backward_wire` | a wire this edit created runs right to left and could not be repaired (typically because it closes a cycle, so no shift can put both ends in order) |
 
 The whole `layout` key is **absent** when there is nothing to say: no existing
-node moved and nothing was found. That is the usual, good outcome — a new node
-alone does not produce it.
+node moved, nothing was found, and the edit had no layout statements. That is
+the usual, good outcome — a new node alone does not produce it.
 
 #### Previewing an edit: `--dry-run`
 

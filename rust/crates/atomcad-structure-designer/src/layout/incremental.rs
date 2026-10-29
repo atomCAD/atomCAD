@@ -16,7 +16,8 @@
 //! `doc/design_deliberate_node_placement.md` Phase 3 made the pass explain
 //! itself: every motion call records why it moved what it moved, and the
 //! driver returns a [`LayoutReport`](crate::layout::LayoutReport) instead of a
-//! bare move list (`report.rs`).
+//! bare move list (`report.rs`). Its Phase 5 added Step 2½, the AI's layout
+//! statements (`placement.rs`), and the **pinned** set every later step holds.
 //!
 //! # The one rule everything else depends on
 //!
@@ -39,17 +40,20 @@ use crate::layout::common::{
 };
 use crate::layout::delta::{DeltaTotals, EditDelta, WireKey, diff_scope, scopes_inside_out};
 use crate::layout::motion::{
-    CascadeDir, GAP, Rect, ShiftOutcome, cascade, grow_rect, measure_scope, shift_half_plane,
-    snap_shift_line, upstream_closure,
+    CascadeDir, GAP, Rect, ShiftOutcome, cascade, grow_rect, measure_scope,
+    shift_half_plane_holding, snap_shift_line, upstream_closure,
+};
+use crate::layout::placement::{
+    ScopeStatement, StatementContext, StatementOutcome, run_statements,
 };
 use crate::layout::report::{
-    Causes, LayoutMove, LayoutReport, MoveCause, PlacedBox, scope_findings,
+    Causes, LayoutMove, LayoutReport, LayoutWarning, MoveCause, PlacedBox, scope_findings,
 };
 use crate::layout::size::{rendered_body_size, rendered_node_size};
 use crate::node_layout::{FIRST_PIN_OFFSET, HOF_BODY_BOTTOM_PADDING, PER_PARAM_HEIGHT};
 use crate::node_network::{NodeNetwork, SourcePin};
 use crate::node_type_registry::NodeTypeRegistry;
-use crate::text_format::{NamePath, PositionSnapshot, unique_node_names};
+use crate::text_format::{NamePath, PositionSnapshot, ScopedLayoutStatement, unique_node_names};
 
 /// The node box both hand-drawn corpora were measured at (160 x 83).
 const TYPICAL_NODE_HEIGHT: f64 = 83.0;
@@ -241,7 +245,12 @@ impl Anchors {
 ///    leave holes (D4). The obstacle set is the kept nodes — every node in the
 ///    scope except the ones this edit added.
 /// 2. **Repair grown nodes** ([`repair_grown`]).
-/// 3. **Lay the added nodes out as blocks**, each connected component by
+///
+///    2½. **Run the layout statements**, in written order
+///    ([`run_statements`]). Every node one places or arranges, and after the
+///    last one every node one measured against, is **pinned**: no later
+///    cascade moves it (`doc/design_deliberate_node_placement.md` D6).
+/// 3. **Lay the remaining added nodes out as blocks**, each connected component by
 ///    itself, through [`layout_subgraph`](crate::layout::layout_subgraph).
 /// 4. **Choose each block's target position** from its anchors.
 /// 5. **Fit it in**: slide into free space if there is any near the target,
@@ -259,13 +268,17 @@ impl Anchors {
 /// (`auto_layout::calculate_new_node_position`) to wherever their block landed —
 /// each with the causes recorded for it (`report.rs`, "Causes are recorded at
 /// the call sites").
+#[allow(clippy::too_many_arguments)]
 pub fn layout_scope(
     scope: &mut NodeNetwork,
     registry: &NodeTypeRegistry,
     delta: &EditDelta,
     frame: Option<&BodyFrame>,
     algorithm: LayoutAlgorithm,
-) -> Vec<ScopeMove> {
+    statements: &[ScopeStatement],
+    snapshot: &PositionSnapshot,
+    scope_names: &[String],
+) -> ScopeOutcome {
     let before: HashMap<u64, DVec2> = scope
         .nodes
         .iter()
@@ -292,28 +305,75 @@ pub fn layout_scope(
     // --- Step 2: repair grown nodes -----------------------------------------
     repair_grown_recorded(scope, &sizes, delta, &mut causes, &names);
 
+    // --- Step 2½: the layout statements, in written order --------------------
+    let statements = if statements.is_empty() {
+        StatementOutcome::default()
+    } else {
+        let ctx = StatementContext {
+            registry,
+            snapshot,
+            scope_names,
+            added: &added,
+            measured: &measured,
+            frame,
+        };
+        run_statements(scope, &mut sizes, statements, &ctx, &mut causes)
+    };
+    let pinned = &statements.pinned;
+    // The added nodes left to the automatic rules: what no statement placed.
+    let auto_added: HashSet<u64> = added.difference(&statements.handled).copied().collect();
+
     // --- Step 3: lay the added nodes out as blocks --------------------------
-    let blocks = build_blocks(scope, registry, &added, &measured, algorithm);
+    let blocks = build_blocks(scope, registry, &auto_added, &measured, algorithm);
 
     // --- Steps 4 and 5: place them ------------------------------------------
-    place_blocks(scope, &mut sizes, &blocks, frame, &mut causes, &names);
+    place_blocks(
+        scope,
+        &mut sizes,
+        &blocks,
+        frame,
+        pinned,
+        &mut causes,
+        &names,
+    );
 
     // --- Step 6: repair the backward wires this edit created -----------------
-    repair_backward_wires(scope, &sizes, delta, &added, &mut causes);
+    repair_backward_wires(
+        scope,
+        &sizes,
+        delta,
+        &added,
+        &auto_added,
+        &statements.handled,
+        &before,
+        &measured,
+        pinned,
+        &mut causes,
+    );
 
     // --- Step 7: place the comments this edit created ------------------------
     place_new_comments(
         scope,
         registry,
         &mut sizes,
-        &added,
+        &auto_added,
         frame,
+        pinned,
         &mut causes,
         &names,
     );
 
     // --- Step 8: pull a drifted comment back to its anchor -------------------
-    restore_drifted_comments(scope, registry, &sizes, &added, &before, frame, &mut causes);
+    restore_drifted_comments(
+        scope,
+        registry,
+        &sizes,
+        &added,
+        &before,
+        frame,
+        pinned,
+        &mut causes,
+    );
 
     let mut moves: Vec<ScopeMove> = before
         .iter()
@@ -328,7 +388,22 @@ pub fn layout_scope(
         })
         .collect();
     moves.sort_by_key(|m| m.id);
-    moves
+    ScopeOutcome {
+        moves,
+        placed: statements.placed,
+        warnings: statements.warnings,
+    }
+}
+
+/// What one scope's pass did.
+#[derive(Debug, Clone, Default)]
+pub struct ScopeOutcome {
+    /// Every node whose position changed, ascending id, with its causes.
+    pub moves: Vec<ScopeMove>,
+    /// The subjects of `place` statements, new or existing.
+    pub placed: Vec<u64>,
+    /// The statements that could not be carried out as written.
+    pub warnings: Vec<LayoutWarning>,
 }
 
 /// One node a scope's pass moved, with every cause recorded for it in order.
@@ -364,6 +439,9 @@ fn describe_new(names: &HashMap<u64, String>, ids: &[u64]) -> String {
 }
 
 /// Record both halves of a [`ShiftOutcome`] under one cause.
+///
+/// The automatic pass's shifts all record [`MoveCause::Auto`]; a `push right`
+/// records its own (`placement.rs`).
 fn record_shift(causes: &mut Causes, outcome: &ShiftOutcome, why: &str) {
     causes.record(
         outcome.shifted.iter().chain(outcome.pushed.iter()).copied(),
@@ -495,6 +573,7 @@ fn place_blocks(
     sizes: &mut HashMap<u64, DVec2>,
     blocks: &[Block],
     frame: Option<&BodyFrame>,
+    pinned: &HashSet<u64>,
     causes: &mut Causes,
     names: &HashMap<u64, String>,
 ) {
@@ -519,17 +598,18 @@ fn place_blocks(
 
     for index in order {
         let why = format!("made room for {}", describe_new(names, &blocks[index].ids));
-        place_block(scope, sizes, &blocks[index], frame, causes, &why);
+        place_block(scope, sizes, &blocks[index], frame, pinned, causes, &why);
     }
 }
 
 /// Steps 4 and 5 for one block. Every move the placement causes is recorded
-/// with `why`.
+/// with `why`; nothing in `pinned` is pushed.
 fn place_block(
     scope: &mut NodeNetwork,
     sizes: &mut HashMap<u64, DVec2>,
     block: &Block,
     frame: Option<&BodyFrame>,
+    pinned: &HashSet<u64>,
     causes: &mut Causes,
     why: &str,
 ) {
@@ -540,22 +620,25 @@ fn place_block(
     // Step 4 may widen the drawing (the "no room" case), so it takes the
     // network mutably; the anchors it reasons about were read before that, and
     // the shift it performs moves only nodes at or right of the block's own x.
-    let target = target_position(scope, sizes, block, &anchors, frame, causes, why);
+    let target = target_position(scope, sizes, block, &anchors, frame, pinned, causes, why);
     let (origin, push) = fit(scope, sizes, block, target, frame);
-    commit_block(scope, sizes, block, origin, push, causes, why);
+    commit_block(scope, sizes, block, origin, push, pinned, causes, why);
 }
 
 /// Put `block` down at `origin`, cascade the drawing out of the way if the fit
 /// asked for it, and let the block join the obstacle set.
 ///
 /// The tail of Step 5, split out because Step 7 places a new comment through
-/// the same three moves after choosing its origin by a rule of its own.
+/// the same three moves after choosing its origin by a rule of its own. The
+/// cascade holds `pinned` (D6): it pushes something else instead.
+#[allow(clippy::too_many_arguments)]
 fn commit_block(
     scope: &mut NodeNetwork,
     sizes: &mut HashMap<u64, DVec2>,
     block: &Block,
     origin: DVec2,
     push: bool,
+    pinned: &HashSet<u64>,
     causes: &mut Causes,
     why: &str,
 ) {
@@ -572,8 +655,8 @@ fn commit_block(
         // Step 5b. The block's own nodes are still absent from `sizes`, so the
         // cascade cannot push them — only the drawing they landed on.
         let r = Rect::new(origin, block.size);
-        let dir = choose_cascade_dir(scope, sizes, r);
-        let moved = cascade(scope, sizes, r, dir, &HashSet::new(), &HashSet::new());
+        let dir = choose_cascade_dir(scope, sizes, r, pinned);
+        let moved = cascade(scope, sizes, r, dir, pinned, &HashSet::new());
         causes.record(moved, MoveCause::Auto, why);
     }
 
@@ -599,7 +682,16 @@ fn commit_block(
 /// Simulating means running the real cascade and undoing it: a cascade only
 /// ever writes `position.y` of a placed node, so restoring those is exact, and
 /// it is far cheaper than cloning the network three times.
-fn choose_cascade_dir(scope: &mut NodeNetwork, sizes: &HashMap<u64, DVec2>, r: Rect) -> CascadeDir {
+///
+/// `fixed` is what the real cascade will hold (the pinned set), so the
+/// simulation holds it too. Also the direction of a statement's push when it
+/// names none (`placement.rs`).
+pub(crate) fn choose_cascade_dir(
+    scope: &mut NodeNetwork,
+    sizes: &HashMap<u64, DVec2>,
+    r: Rect,
+    fixed: &HashSet<u64>,
+) -> CascadeDir {
     let hand: HashSet<u64> = placed_ids(sizes)
         .into_iter()
         .filter(|id| scope.nodes.get(id).is_some_and(|node| node.hand_moved))
@@ -615,7 +707,7 @@ fn choose_cascade_dir(scope: &mut NodeNetwork, sizes: &HashMap<u64, DVec2>, r: R
 
     let mut best: Option<((usize, usize, f64), CascadeDir)> = None;
     for dir in [CascadeDir::Split, CascadeDir::Up, CascadeDir::Down] {
-        let moved = cascade(scope, sizes, r, dir, &HashSet::new(), &HashSet::new());
+        let moved = cascade(scope, sizes, r, dir, fixed, &HashSet::new());
         let hand_count = moved.iter().filter(|id| hand.contains(id)).count();
         let displacement: f64 = saved
             .iter()
@@ -759,12 +851,14 @@ fn anchors_of(
 /// Inside a body the result is clamped to non-negative: a body's extent is
 /// measured from its own origin, so content at a negative coordinate is simply
 /// not measured and renders outside the box.
+#[allow(clippy::too_many_arguments)]
 fn target_position(
     scope: &mut NodeNetwork,
     sizes: &HashMap<u64, DVec2>,
     block: &Block,
     anchors: &Anchors,
     frame: Option<&BodyFrame>,
+    pinned: &HashSet<u64>,
     causes: &mut Causes,
     why: &str,
 ) -> DVec2 {
@@ -813,7 +907,14 @@ fn target_position(
                     .map(|anchor| anchor.rect.left())
                     .fold(f64::INFINITY, f64::min);
                 let threshold = snap_shift_line(scope, sizes, x_min, right_end, &fixed);
-                let outcome = shift_half_plane(scope, sizes, threshold, x_min - x_max, &fixed);
+                let outcome = shift_half_plane_holding(
+                    scope,
+                    sizes,
+                    threshold,
+                    x_min - x_max,
+                    &fixed,
+                    pinned,
+                );
                 record_shift(causes, &outcome, why);
             }
             x_min
@@ -1029,30 +1130,44 @@ fn obstacles_at(
 ///   `added_wires`, and the pre-edit drawing is the baseline however irregular.
 /// - **Cross-scope wires are skipped**: the two ends are in different
 ///   coordinate frames, so "left of" is not a statement about them.
-/// - **A wire touching an added node is skipped**: Step 4 already placed that
-///   block against this very wire as an anchor, and re-repairing it here would
-///   shift the drawing a second time for one insertion.
+/// - **A wire touching a node Steps 3–5 placed is skipped**: Step 4 already
+///   placed that block against this very wire as an anchor, and re-repairing
+///   it here would shift the drawing a second time for one insertion.
+///
+/// A node a layout statement placed, moved or arranged (`handled`) never went
+/// through Step 4, so nothing else checks its wires: an AI that misjudged a
+/// width would leave a backward wire behind. Every same-scope wire touching
+/// one is therefore checked too — new ones like any new wire, and existing
+/// ones unless they already ran backward before the edit
+/// (`doc/design_deliberate_node_placement.md`, "Step 6 and statement-placed
+/// nodes"). The repair is the same shift, holding the source's upstream
+/// closure fixed; a placed destination moves with its side (D6).
 ///
 /// Positions are re-read between entries, so several new wires in one scope
-/// compose rather than fight.
+/// compose rather than fight. A shift's vertical clean-up holds `pinned`.
+#[allow(clippy::too_many_arguments)]
 fn repair_backward_wires(
     scope: &mut NodeNetwork,
     sizes: &HashMap<u64, DVec2>,
     delta: &EditDelta,
     added: &HashSet<u64>,
+    auto_added: &HashSet<u64>,
+    handled: &HashSet<u64>,
+    before: &HashMap<u64, DVec2>,
+    measured: &HashMap<u64, DVec2>,
+    pinned: &HashSet<u64>,
     causes: &mut Causes,
 ) {
-    if delta.added_wires.is_empty() {
-        return;
-    }
     // Names are unique within a scope, so the last segment of a path is enough
     // to resolve it here — and it is the only handle that survives a
     // `--replace`, which mints fresh ids for everything.
-    let by_name: HashMap<String, u64> = unique_node_names(scope)
-        .into_iter()
-        .map(|(id, name)| (name, id))
-        .collect();
+    let names = unique_node_names(scope);
+    let by_name: HashMap<String, u64> =
+        names.iter().map(|(&id, name)| (name.clone(), id)).collect();
 
+    // `(source, destination)`, new wires first in their delta order, then the
+    // existing wires of statement-handled nodes, ascending.
+    let mut candidates: Vec<(u64, u64)> = Vec::new();
     for key in &delta.added_wires {
         if key.is_cross_scope() {
             continue;
@@ -1062,17 +1177,65 @@ fn repair_backward_wires(
         else {
             continue;
         };
-        let (Some(&source_id), Some(&destination_id)) =
+        if let (Some(&source_id), Some(&destination_id)) =
             (by_name.get(source_name), by_name.get(destination_name))
-        else {
-            continue;
+        {
+            candidates.push((source_id, destination_id));
+        }
+    }
+    if !handled.is_empty() {
+        let mut ids: Vec<u64> = scope.nodes.keys().copied().collect();
+        ids.sort_unstable();
+        let was_backward = |source: u64, destination: u64| -> bool {
+            // Both ends existed before the edit and the wire ran backward
+            // then: the baseline, left alone.
+            let (Some(&sp), Some(&dp), Some(&ss)) = (
+                before.get(&source),
+                before.get(&destination),
+                measured.get(&source),
+            ) else {
+                return false;
+            };
+            !added.contains(&source) && !added.contains(&destination) && sp.x + ss.x + GAP > dp.x
         };
+        let mut extra: Vec<(u64, u64)> = Vec::new();
+        for &destination in &ids {
+            let Some(node) = scope.nodes.get(&destination) else {
+                continue;
+            };
+            for argument in &node.arguments {
+                for wire in &argument.incoming_wires {
+                    if wire.source_scope_depth != 0
+                        || !matches!(wire.source_pin, SourcePin::NodeOutput { .. })
+                    {
+                        continue;
+                    }
+                    let source = wire.source_node_id;
+                    if !handled.contains(&source) && !handled.contains(&destination) {
+                        continue;
+                    }
+                    if was_backward(source, destination) {
+                        continue;
+                    }
+                    extra.push((source, destination));
+                }
+            }
+        }
+        extra.sort_unstable();
+        candidates.extend(extra);
+    }
+    let mut seen: HashSet<(u64, u64)> = HashSet::new();
+    candidates.retain(|pair| seen.insert(*pair));
+
+    for (source_id, destination_id) in candidates {
         if source_id == destination_id
-            || added.contains(&source_id)
-            || added.contains(&destination_id)
+            || auto_added.contains(&source_id)
+            || auto_added.contains(&destination_id)
         {
             continue;
         }
+        let source_name = name_of(&names, source_id);
+        let destination_name = name_of(&names, destination_id);
 
         let (Some(source), Some(destination)) = (
             rect_of(scope, sizes, source_id),
@@ -1093,7 +1256,7 @@ fn repair_backward_wires(
         }
         let right_end = destination.left();
         let threshold = snap_shift_line(scope, sizes, right_end, right_end, &fixed);
-        let outcome = shift_half_plane(scope, sizes, threshold, deficit, &fixed);
+        let outcome = shift_half_plane_holding(scope, sizes, threshold, deficit, &fixed, pinned);
         record_shift(
             causes,
             &outcome,
@@ -1124,12 +1287,14 @@ fn repair_backward_wires(
 /// its left edge.
 ///
 /// Ascending id, each comment joining the obstacle set as it lands.
+#[allow(clippy::too_many_arguments)]
 fn place_new_comments(
     scope: &mut NodeNetwork,
     registry: &NodeTypeRegistry,
     sizes: &mut HashMap<u64, DVec2>,
     added: &HashSet<u64>,
     frame: Option<&BodyFrame>,
+    pinned: &HashSet<u64>,
     causes: &mut Causes,
     names: &HashMap<u64, String>,
 ) {
@@ -1152,7 +1317,7 @@ fn place_new_comments(
         let Some(target) = anchor_placement_box(scope, registry, &positions, id) else {
             // Unanchored, or anchored at something this pass has no position
             // for: an anchorless block.
-            place_block(scope, sizes, &block, frame, causes, &why);
+            place_block(scope, sizes, &block, frame, pinned, causes, &why);
             continue;
         };
 
@@ -1176,7 +1341,7 @@ fn place_new_comments(
                 fit(scope, sizes, &block, start, frame)
             }
         };
-        commit_block(scope, sizes, &block, origin, push, causes, &why);
+        commit_block(scope, sizes, &block, origin, push, pinned, causes, &why);
     }
 }
 
@@ -1195,7 +1360,9 @@ fn place_new_comments(
 /// anchor (the distance test), create an overlap (the collision test), or act
 /// on an anchor it cannot resolve on both sides (a target the edit removed, or
 /// one the edit added, whose "before" position is the throwaway the creation
-/// placer gave it).
+/// placer gave it). A pinned comment — one a statement placed or measured
+/// against — is never pulled back (D6).
+#[allow(clippy::too_many_arguments)]
 fn restore_drifted_comments(
     scope: &mut NodeNetwork,
     registry: &NodeTypeRegistry,
@@ -1203,6 +1370,7 @@ fn restore_drifted_comments(
     added: &HashSet<u64>,
     before: &HashMap<u64, DVec2>,
     frame: Option<&BodyFrame>,
+    pinned: &HashSet<u64>,
     causes: &mut Causes,
 ) {
     // The pre-edit drawing: the placed set at the positions it held when this
@@ -1218,6 +1386,7 @@ fn restore_drifted_comments(
         .keys()
         .copied()
         .filter(|id| scope.nodes.get(id).is_some_and(is_comment))
+        .filter(|id| !pinned.contains(id))
         .collect();
     comments.sort_unstable();
 
@@ -1310,7 +1479,40 @@ pub fn layout_incremental(
     before_wires: &HashSet<WireKey>,
     algorithm: LayoutAlgorithm,
 ) -> IncrementalOutcome {
+    layout_incremental_with_statements(network, registry, snapshot, before_wires, algorithm, &[])
+}
+
+/// [`layout_incremental`] with the edit's layout statements
+/// (`doc/design_deliberate_node_placement.md` A2), which run as Step 2½ of the
+/// scope each one places in, in written order.
+///
+/// A scope with statements runs even when its delta is empty — `place x by
+/// (0, 40)` is an edit of the drawing alone. A statement whose scope does not
+/// exist (a path through no body, or a body this edit deleted) is reported as
+/// a warning and dropped.
+pub fn layout_incremental_with_statements(
+    network: &mut NodeNetwork,
+    registry: &NodeTypeRegistry,
+    snapshot: &PositionSnapshot,
+    before_wires: &HashSet<WireKey>,
+    algorithm: LayoutAlgorithm,
+    statements: &[ScopedLayoutStatement],
+) -> IncrementalOutcome {
     let mut outcome = IncrementalOutcome::default();
+    outcome.report.statements = statements.len();
+
+    // Each statement goes to the scope it places in, keeping written order.
+    let mut by_scope: Vec<(NamePath, Vec<ScopeStatement>)> = Vec::new();
+    for scoped in statements {
+        let statement = ScopeStatement::from_scoped(scoped);
+        match by_scope
+            .iter_mut()
+            .find(|(scope, _)| *scope == statement.scope)
+        {
+            Some((_, list)) => list.push(statement),
+            None => by_scope.push((statement.scope.clone(), vec![statement])),
+        }
+    }
 
     for (scope_ids, scope_names) in scopes_inside_out(network) {
         let Some(delta) = diff_scope(
@@ -1329,7 +1531,12 @@ pub fn layout_incremental(
         // triggers no repair"), and spelling that out here would only give the
         // rule two homes.
         outcome.totals.add(&delta);
-        if delta.is_empty() {
+        let scope_statements: Vec<ScopeStatement> =
+            match by_scope.iter().position(|(scope, _)| *scope == scope_names) {
+                Some(index) => by_scope.remove(index).1,
+                None => Vec::new(),
+            };
+        if delta.is_empty() && scope_statements.is_empty() {
             continue;
         }
 
@@ -1337,7 +1544,18 @@ pub fn layout_incremental(
         let Some(scope) = scope_mut(network, &scope_ids) else {
             continue;
         };
-        let moves = layout_scope(scope, registry, &delta, frame.as_ref(), algorithm);
+        let scope_outcome = layout_scope(
+            scope,
+            registry,
+            &delta,
+            frame.as_ref(),
+            algorithm,
+            &scope_statements,
+            snapshot,
+            &scope_names,
+        );
+        let moves = scope_outcome.moves;
+        outcome.report.warnings.extend(scope_outcome.warnings);
         let unique = unique_node_names(scope);
         let path_of = |id: u64| -> Option<NamePath> {
             let mut path = scope_names.clone();
@@ -1362,7 +1580,24 @@ pub fn layout_incremental(
 
         // Measured after the pass, so the boxes are the ones that rendered.
         let sizes = measure_scope(scope, registry);
+        let placed: HashSet<u64> = scope_outcome.placed.iter().copied().collect();
+        let mut placed_ids: Vec<u64> = placed.iter().copied().collect();
+        placed_ids.sort_unstable();
+        for id in placed_ids {
+            let (Some(path), Some(node), Some(&size)) =
+                (path_of(id), scope.nodes.get(&id), sizes.get(&id))
+            else {
+                continue;
+            };
+            outcome.report.placed.push(PlacedBox {
+                path,
+                rect: Rect::new(node.position, size),
+            });
+        }
         for &id in &delta.added {
+            if placed.contains(&id) {
+                continue; // in `placed`, not `auto_placed`
+            }
             let (Some(path), Some(node), Some(&size)) =
                 (path_of(id), scope.nodes.get(&id), sizes.get(&id))
             else {
@@ -1380,6 +1615,16 @@ pub fn layout_incremental(
             snapshot,
             &delta.added_wires,
         ));
+    }
+
+    // A statement whose scope never came up: no such body.
+    for (scope, list) in by_scope {
+        for statement in list {
+            outcome.report.warnings.push(statement.warning(
+                format!("`{}` names no body in this network", scope.join("/")),
+                "ignored",
+            ));
+        }
     }
 
     outcome.report.sort();

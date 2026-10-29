@@ -4,7 +4,7 @@ Complete specification for atomCAD's text-based node network format.
 
 ## Overview
 
-The text format enables programmatic creation and modification of node networks. Each line represents one operation: creating a node, setting the output, or deleting a node.
+The text format enables programmatic creation and modification of node networks. Each statement is one operation: creating or updating a node, setting the output, deleting a node, a layout instruction (`place` / `arrange` / `straighten`), or setting the network's `description "…"` / `summary "…"`. A statement usually fits on one line; one carrying a `body { … }` block spans several.
 
 ## Node Creation Syntax
 
@@ -56,19 +56,19 @@ Inputs are specified as key-value pairs inside braces, separated by commas.
 | Type | Syntax | Examples |
 |------|--------|----------|
 | Integer | Decimal number | `42`, `-10`, `0` |
-| Float | Decimal with point or exponent | `3.14`, `-1.5`, `1e-3`, `.5` |
+| Float | Decimal with point or exponent (a leading digit is required: `0.5`, not `.5`) | `3.14`, `-1.5`, `1e-3`, `0.5` |
 | Boolean | `true` or `false` | `true`, `false` |
-| String | Double-quoted | `"hello"`, `"path/to/file.xyz"` |
+| String | Double-quoted (escapes `\n` `\r` `\t` `\\` `\"`); triple-quoted `"""…"""` for multi-line | `"hello"`, `"path/to/file.xyz"` |
 | Vec2/IVec2 | 2-tuple | `(1, 2)`, `(0.5, -1.0)` |
 | Vec3/IVec3 | 3-tuple | `(1, 2, 3)`, `(0.0, 0.0, 0.0)` |
 | Array | Bracketed list | `[1, 2, 3]`, `[node1, node2]` |
 | Node reference | Node ID | `sphere1`, `my_shape` |
-| Type (for `data_type`, `input_type`, `element_type`, …) | As `query` prints it | `Int`, `[String]`, `HasStructure -> HasStructure`, `(Int, Float) -> Bool`, `() -> Int`, `Iter[Int]`, `Optional[Vec3]`, `Record(ElementMapping)`, `[HasStructure -> HasStructure]` |
+| Type (for `data_type`, `input_type`, `element_type`, …) | As `query` prints it | `Int`, `[String]`, `HasStructure -> HasStructure`, `(Int,Float) -> Bool`, `() -> Int`, `Iter[Int]`, `Optional[Vec3]`, `Record(ElementMapping)`, `[HasStructure -> HasStructure]` |
 
 ### Special Inputs
 
 - `visible: true/false` - Controls whether the node's output is rendered in the viewport (`true` = primary output pin only)
-- `visible: [x, y]` - Display exactly these output pins of a multi-output node (`record_destructure`, `structure_unpack`, `unpack`, …); names are the same ones the `.pin` wire syntax uses. `query` prints the list only when the displayed set is not just pin 0
+- `visible: [x, y]` - Display exactly these output pins of a multi-output node (`record_destructure`, `structure_unpack`, `lattice_vecs_unpack`, …); names are the same ones the `.pin` wire syntax uses. `query` prints the list only when the displayed set is not just pin 0
 - `visible: ghost` - Display as a ghost (semi-transparent); `visible: { pins: [x, y], ghost: true }` combines the two. A mentioned `visible` assigns the whole display state
 - `pin_roles: { input: delayed, translation: supplied }` - Per-pin overrides of the node's function-pin signature (`delayed` = always a parameter, `supplied` = always baked in; absent = decided by wiring). Written by `query` only when set; `pin_roles: {}` clears
 
@@ -87,7 +87,7 @@ result = union { shapes: [sphere1, cuboid1] }
 
 For single-value inputs:
 ```
-filled = atom_fill { shape: sphere1 }
+filled = materialize { shape: sphere1 }
 ```
 
 For array inputs (multiple wires):
@@ -158,7 +158,7 @@ Syntax rules:
 - An **empty** body serializes as no block at all.
 - A `body { … }` block on a node type that owns no body is refused with a
   "has no body" error, not silently ignored. Likewise a `$name` written outside
-  any body is reported rather than dropped.
+  any body is reported (as a warning) rather than dropped.
 
 ### Outward references
 
@@ -191,11 +191,13 @@ must be written with an explicit `^`. Serialization always emits the explicit
 `^` form, so a round trip never depends on shadowing.
 
 Reaching past the outermost scope (`^^^n` at depth 2, `^$x` at the top level) is
-an error, not a silent drop.
+reported, not silently dropped: the edit returns a warning ("reaches past the
+top-level network" / "reaches past the outermost enclosing body") and makes no
+wire.
 
 ### Zone pin names
 
-They are not uniform — only `map` and `zip_with` call the result `result`:
+They are not uniform — among the HOFs only `map` and `zip_with` call the result `result`:
 
 | Node | Zone inputs (`$…`) | Zone output (`output …`) |
 |------|--------------------|--------------------------|
@@ -204,7 +206,7 @@ They are not uniform — only `map` and `zip_with` call the result `result`:
 | `foreach` | `element` | `out` (`Unit`) |
 | `fold` | `acc`, `element` | `new_acc` |
 | `zip_with` | `element1` … `elementN` | `result` |
-| `closure` | its own `params` | `new_acc` (fold kind), `out` (foreach kind), else `result` |
+| `closure` | its own `params` (custom kind), `acc`, `element` (fold kind), else `element` | `new_acc` (fold kind), `out` (foreach kind), else `result` |
 
 ### `output` inside a block
 
@@ -338,24 +340,50 @@ delete m1/e        # removes `e` from m1's body
 delete m1          # removes m1 and everything in its body
 ```
 
+## Layout Statements
+
+`place`, `arrange` and `straighten` say where nodes go on the canvas. They act
+once, after the network change, in written order, and are never stored or
+printed by `query`:
+
+```
+place n below h push down                 # one node, a relation, a push direction
+place [n, pitch] column below d           # a group, stacked in written order
+place n right_of a, bottom_even_with b    # one clause per axis
+place r below all                         # `all` = the drawing's extent
+place n at (310, 540)                     # top-left corner, query --layout coordinates
+place [a, b] by (210, 0)                  # move existing nodes by an offset
+arrange [a, b, c]
+straighten [a, b]
+```
+
+The full vocabulary — clauses, gaps, `push`, what is rejected and how — is the
+skill's "Layout statements" section. A node named `place` / `arrange` /
+`straighten` is still assignable (`place = int { value: 1 }`).
+
 ## Comments
 
-Lines starting with `#` are comments:
+A `#` starts a comment that runs to the end of the line, whether the line is a
+whole-line comment or ends a statement (a `#` inside a string or a
+backtick-quoted name is not a comment):
 
 ```
 # This is a comment
-sphere1 = sphere { radius: 5 }  # Inline comments are NOT supported
+sphere1 = sphere { radius: 5 }  # so is this
 ```
+
+`query` does not print comments back.
 
 ## Multi-line Input
 
 When using `atomcad-cli edit` without `--code`, input is read from stdin:
 
-- Enter text format commands, one per line
-- End input with an empty line or a line containing only `.`
-- Press Ctrl+C to cancel without applying changes
+- Piped or redirected stdin (`edit < script.txt`, a heredoc) is read whole, to
+  end of file, blank lines included
+- Typed at a terminal, input ends at an empty line or a line containing only
+  `.`; press Ctrl+C to cancel without applying changes
 
-Example session:
+Example interactive session:
 ```
 $ atomcad-cli edit
 sphere1 = sphere { radius: 5 }
@@ -401,23 +429,31 @@ names are the names this format uses.
 
 When editing (not replacing), if a node ID already exists:
 - The existing node is updated with the new input values
-- The node type cannot be changed (create a new node instead)
+- The node type cannot be changed (create a new node instead). This is not
+  reported as an error: a different type name on an existing name is ignored,
+  and the properties are applied to the node as its original type (any it lacks
+  come back as "Unknown property" warnings)
 - Inputs you mention are reassigned; inputs you leave out keep their wires. See
   [Removing a wire](#removing-a-wire)
 - Wires *from* the node (to its consumers) are untouched either way
 
 ## Error Handling
 
-Common errors and their causes:
+The edit result separates `errors` (which make `success` false) from `warnings`
+(the rest of the edit still applies). Common problems and how they are reported:
 
-| Error | Cause |
-|-------|-------|
-| Unknown node type | Node type doesn't exist (check spelling, use `atomcad-cli nodes`) |
-| Unknown input | Input name not valid for this node type (use `atomcad-cli describe`) |
-| Type mismatch | Value type doesn't match expected input type |
-| Unknown node reference | Referenced node ID doesn't exist |
-| Duplicate node ID | In replace mode, same ID used twice |
-| Cycle detected | Wire connections form a cycle (not allowed in DAG) |
+| Problem | Reported as | Cause |
+|---------|-------------|-------|
+| `Unknown node type: '…'` | error | Node type doesn't exist (check spelling, use `atomcad-cli nodes`) |
+| `Unknown property '…' on node type '…'` | warning; the property is ignored | Input name not valid for this node type (use `atomcad-cli describe`) |
+| `Error setting properties on '…': …` | error | A literal of the wrong type for the input (e.g. a string for `sphere.radius`) |
+| `Data type mismatch: input expects …, but source outputs …` | error (validation) | A wire whose source type does not convert to the input's type |
+| `Source node '…' not found` | warning; no wire is made | A property references a node name that doesn't exist |
+| `Cannot set output to '…'` / `Cannot delete '…'`: node not found | error | `output` / `delete` names a node that doesn't exist |
+| `Wire cycle detected among: …` | error (validation) | Wire connections form a cycle (not allowed in DAG) |
+
+Writing the same name twice in one script is not an error, in either mode: the
+second statement updates the node the first one created.
 
 ## Complete Example
 
@@ -432,7 +468,7 @@ inner = cuboid { min_corner: (2, 2, 2), extent: (16, 16, 16) }
 shell = diff { base: [outer], sub: [inner] }
 
 # Fill with atoms
-atoms = atom_fill { shape: shell, passivate: true, visible: true }
+atoms = materialize { shape: shell, passivate: true, visible: true }
 
 # Set as network output
 output atoms

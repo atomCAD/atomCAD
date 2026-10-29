@@ -55,4 +55,4 @@ Beside them, one page describes a *file format* rather than a category of nodes:
 - [Operation libraries](./reference_guide/op_libraries.md) — the two JSON files
   a mechanosynthesis build is made of, and how to author one.
 
-You create 2D geometry to eventually use the **extrude** node to create a 3D `Blueprint` from it. You create a `Blueprint` to eventually use the **atom_fill** node to materialize an atomic structure from it.
+You create 2D geometry to eventually use the **extrude** node to create a 3D `Blueprint` from it. You create a `Blueprint` to eventually use the **materialize** node to carve an atomic structure (a `Crystal`) out of it.

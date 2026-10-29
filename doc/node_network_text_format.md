@@ -68,11 +68,19 @@ delete nodename    # Remove a node and its connections
 Both take a **path** when they address a node inside a zone body — `output m1/e`,
 `delete m1/e`. See [Zone Bodies](#zone-bodies).
 
+Three more statements say where nodes go on the canvas — `place`, `arrange` and
+`straighten`. They are instructions to the layout, carried out once by the edit
+that contains them and never stored. See [Layout Statements](#layout-statements).
+
 ### Comments
 
 ```
-# Single-line comments start with #
+# A # starts a comment that runs to the end of the line
+sphere1 = sphere { radius: 5 }   # it can also end a statement
 ```
+
+A `#` inside a string or a backtick-quoted name is not a comment. `query` does
+not print comments back.
 
 ## Data Types and Literals
 
@@ -82,8 +90,12 @@ Both take a **path** when they address a node inside a zone body — `output m1/
 |------|--------|----------|
 | `Bool` | `true` or `false` | `true`, `false` |
 | `Int` | Integer literal | `42`, `-10`, `0` |
-| `Float` | Decimal or scientific notation | `3.14`, `-1.5`, `2.5e-3`, `1.0` |
-| `String` | Double-quoted | `"hello"`, `"path/to/file.xyz"` |
+| `Float` | Decimal or scientific notation; the integer part is required (`0.5`, not `.5`) | `3.14`, `-1.5`, `2.5e-3`, `1.0` |
+| `String` | Double-quoted, with escapes `\n` `\r` `\t` `\\` `\"`; triple-quoted for multi-line (below) | `"hello"`, `"path/to/file.xyz"` |
+
+A literal is converted to the type of the property it is written for: an `Int`
+literal works on a `Float` property, and a float literal on an `Int` property is
+**truncated** (`2.7` → `2`).
 
 ### Vector Types
 
@@ -110,9 +122,13 @@ Arrays use square brackets:
 
 ```
 [1, 2, 3]                    # Array of Int
-[sphere1, box1, cylinder1]   # Array of node references
+[sphere1, box1, sphere2]     # Array of node references
 [(0, 0, 0), (1, 1, 1)]       # Array of IVec3
 ```
+
+An array of literals is a value for a list *property* (`polygon.vertices`,
+`array.elements`). On an array *input pin* (`union.shapes`) the list names the
+wires; such a pin is wire-only and takes no literal values.
 
 ### Multi-line Strings
 
@@ -124,7 +140,7 @@ motif1 = motif {
     PARAM PRIMARY C
     PARAM SECONDARY C
     SITE CORNER PRIMARY 0 0 0
-    SITE FACE_Z PRIMARY 0.5 0.5 0
+    SITE INTERIOR1 SECONDARY 0.25 0.25 0.25
     BOND INTERIOR1 ...CORNER
   """
 }
@@ -149,15 +165,24 @@ Here `sphere1` and `box1` refer to the regular output (pin index 0) of those nod
 To reference a node's **function pin** (pin index -1) instead of its evaluated result, prefix with `@`:
 
 ```
+c = ivec3 { x: 0, y: 0, z: 0 }
+pattern = sphere { center: c, pin_roles: { structure: supplied } }
 map1 = map {
   input_type: Int,
-  output_type: Geometry,
+  output_type: Blueprint,
   xs: range1,
   f: @pattern
 }
 ```
 
 The `@pattern` syntax means "use the `pattern` node as a callable function" rather than evaluating it immediately. This is essential for higher-order functions like `map`.
+
+The function's parameters are the node's **unwired** inputs, in pin order;
+wired inputs are baked in. Above, `center` is wired and `structure` is
+`supplied` (see [Function Pin Roles](#function-pin-roles)), so `@pattern` is an
+`Int -> Blueprint` function of `radius`. `map.f` accepts a function whose
+**first** parameter is the element type; any further parameters stay unbound,
+and the output becomes a stream of functions of them.
 
 **When to use `@`:**
 - When connecting to a function-typed input pin (e.g., `map.f`)
@@ -168,7 +193,7 @@ The `@pattern` syntax means "use the `pattern` node as a callable function" rath
 A node can expose more than one output pin. To reference a non-default output, suffix the source name with `.pinname`:
 
 ```
-edit1 = atom_edit { base: input1 }
+edit1 = atom_edit { molecule: input1 }
 applied = apply_diff { base: input1, diff: edit1.diff }
 ```
 
@@ -208,7 +233,7 @@ The format treats node properties and input pin connections uniformly. Both are 
 cuboid1 = cuboid {
   min_corner: (0, 0, 0),     # Property (stored in node data)
   extent: (3, 3, 3),         # Property (stored in node data)
-  unit_cell: uc1             # Input connection (wire from uc1)
+  structure: s1              # Input connection (wire from s1)
 }
 ```
 
@@ -251,7 +276,7 @@ int1 = int { value: 42 }
 ### Output pins and ghosting
 
 A node with several output pins (`record_destructure`, `structure_unpack`,
-`unpack`, …) can display any subset of them, and any displayed node can be
+`lattice_vecs_unpack`, …) can display any subset of them, and any displayed node can be
 drawn as a *ghost* (the semi-transparent display type). The `visible` value
 spells the whole display state:
 
@@ -429,7 +454,10 @@ semantics, not just the referent — so an outer element always needs an explici
 `^`. The serializer always emits the explicit `^` form, so a round trip never
 depends on shadowing.
 
-Reaching past the outermost scope is an error, not a silent drop.
+Reaching past the outermost scope (`^^^n` at depth 2, `^$x` at the top level)
+is reported, not silently dropped: the edit returns a warning ("reaches past the
+top-level network" / "reaches past the outermost enclosing body") and makes no
+wire.
 
 Names are unique **per scope**, not globally: `m1/a` and `m2/a` are different
 nodes and both may exist. `visible: true` likewise works per scope.
@@ -453,7 +481,7 @@ assuming `element` / `result`:
 | `foreach` | `element` | `out` (`Unit`) |
 | `fold` | `acc`, `element` | `new_acc` |
 | `zip_with` | `element1` … `elementN` | `result` |
-| `closure` | its own `params` | `new_acc` (fold kind), `out` (foreach kind), else `result` |
+| `closure` | its own `params` (custom kind), `acc`, `element` (fold kind), else `element` | `new_acc` (fold kind), `out` (foreach kind), else `result` |
 
 ### `closure` properties
 
@@ -520,6 +548,130 @@ outer/inner/n = int { value: 2 }     # depth 2
 The serializer emits only the block form; paths are input-only sugar, which keeps
 query output single-valued and one node to one statement shape.
 
+## Layout Statements
+
+The text has no positions: an edit says *what* the network is, and the layout
+fits new nodes in by their wiring. Layout statements let an edit also say
+*where*. They act once, inside the edit that contains them — `query` never
+prints one back, and nothing about them is saved — so the canvas positions they
+produce are the only trace they leave.
+
+```
+place      <subject> at (<x>, <y>)          [push <dir>]
+place      <nodes> by (<dx>, <dy>)          [push <dir>]
+place      <subject> <clause> [, <clause>]  [push <dir>]
+arrange    [<name>, …]                      [push <dir>]
+straighten [<name>, …]                      [push <dir>]
+```
+
+**Coordinates** are canvas pixels, x to the right and y **down**, the same
+numbers `atomcad-cli query --layout` prints. A position is a node's top-left
+corner. Inside a zone body they are relative to the body's top-left corner.
+
+**Order.** The statements run after the whole network change is applied, in the
+order they are written, and each sees the drawing the earlier ones left. Where
+they sit among the node statements does not matter. A body's statements go
+inside its `body { … }` block, or are path-addressed (`place m1/x below m1/d`).
+
+### Subjects
+
+| Subject | Meaning |
+|---|---|
+| `n` | one node |
+| `[a, b] column` | the nodes stacked top to bottom in written order, lefts aligned, then placed as one box |
+| `[a, b] row` | the nodes side by side in written order, tops aligned, then placed as one box |
+| `[a, b] column (gap: wide)` | the same, with another gap |
+| `[a, b]` | with `by` only: the nodes moved together, as they stand |
+
+### Clauses
+
+| Clause | Sets | Meaning |
+|---|---|---|
+| `right_of T` | x (and y) | one gap right of `T`; alone, tops aligned with `T` |
+| `left_of T` | x (and y) | one gap left of `T`; alone, tops aligned |
+| `below T` | y (and x) | one gap under `T`; alone, lefts aligned with `T` |
+| `above T` | y (and x) | one gap over `T`; alone, lefts aligned |
+| `top_even_with T`, `bottom_even_with T` | y | that edge level with `T`'s |
+| `left_even_with T`, `right_even_with T` | x | that edge level with `T`'s |
+| `straight_from S` | y | the wire from `S` into the subject runs horizontal |
+| `straight_to D` | y | the wire from the subject into `D` runs horizontal |
+
+- **Each axis is stated once.** A lone direction (`right_of T`) supplies the
+  other axis too; an explicit clause on that axis replaces it
+  (`place n right_of a, bottom_even_with b`). Two clauses for one axis, or an
+  axis nothing states (`place n left_even_with a` alone), drop the statement.
+- **Several targets**, `a and b`, measure against the box around all of them.
+- **`all`** is the extent of the whole drawing (the subject left out), measured
+  when the statement runs: `place n below all` starts a new lane under
+  everything, left edge level with the drawing's. A node named `all` is written
+  `` `all` ``.
+- **A node the same edit deletes** can still be a target, at the box it had:
+  `delete hole` beside `place r left_even_with hole, below all`.
+- **Options** on the four directions: `(gap: G)` replaces the default gap, and
+  `(dx: n)` / `(dy: n)` shift the result by a fixed amount, e.g.
+  `place n right_of a (gap: wide, dy: 20)`.
+
+**Gaps** are `tight`, `normal` (the default) or `wide` — 25 / 50 / 100 px side
+by side, 15 / 30 / 60 px stacked — or a number of pixels.
+
+### `by`
+
+`place n by (0, 40)` moves an existing node 40 px down from wherever it stands
+when the statement runs (after anything earlier in the edit moved it).
+`place [a, b, c] by (210, 0)` moves several together, keeping their arrangement.
+A node the edit creates cannot be moved `by`: it has no position yet.
+
+### `push`: which way the nodes it lands on go
+
+A placed node never yields: whatever it lands on moves out of its way.
+`push` chooses the direction.
+
+| | What moves |
+|---|---|
+| *(no `push`)* | each node landed on goes up or down, whichever is cheaper, and anything it then hits |
+| `push down` | the nodes landed on go down, and anything they hit; nothing above moves |
+| `push up` | the same, upward |
+| `push right` | everything at or right of the subject's left edge shifts right together, just far enough; what feeds the subject stays |
+
+```
+place n below h push down           # into a column: the nodes under h make room
+place rot right_of slab push right  # into a chain: everything after slab moves along
+```
+
+There is no `push left`: to make room before a node, place after the node
+before it and `push right`.
+
+### `arrange` and `straighten`
+
+`arrange [a, b, c]` lays out just those nodes by their wiring among themselves,
+keeping the group's top-left corner. `straighten [a, b]` moves each listed node
+up or down until the wire from its first connected input runs horizontal. They
+are the *Arrange selection* and *Straighten wires* commands of the node
+network's Arrange menu. Nothing unlisted moves, except to make room.
+
+### What happens afterwards
+
+What a statement placed, moved or arranged — and the nodes it measured against —
+stays put for the rest of the edit: the automatic placement of the edit's other
+new nodes goes around them. A vertical relation (`below`, `top_even_with`,
+`straight_from`, …) holds exactly when the edit is done. A horizontal one keeps
+its order and at least its gap; it can only widen, when the layout has to shift
+part of the drawing right to keep a wire running left to right.
+
+### When a statement cannot be carried out
+
+A statement that parses but cannot be carried out never fails the edit. It is
+dropped, its subject is placed as if it were not there (a new node
+automatically, an existing one stays), and the edit result's `layout.warnings`
+says which line and why: an unknown node, a node in another scope, an axis
+stated twice or not at all, a node placed by two statements, a new node used as
+a target before any statement placed it, `by` on a new node, a deleted node as
+the subject, or `straight_from` / `straight_to` with no wire between the two. A
+body node placed at a negative coordinate is clamped to 0, with a warning.
+
+A statement that does not *parse* — `push left`, `at` together with a clause,
+`push` written twice — rejects the whole edit, like any other syntax error.
+
 ## Type Annotations
 
 Some nodes have dynamic types that must be specified explicitly:
@@ -560,8 +712,8 @@ size_param = parameter {
 expr1 = expr {
   expression: "x * 2 + y",
   parameters: [
-    { name: "x", type: Int },
-    { name: "y", type: Float }
+    { name: "x", data_type: Int },
+    { name: "y", data_type: Float }
   ]
 }
 ```
@@ -599,11 +751,15 @@ The rules:
 ```
 map1 = map {
   input_type: Int,
-  output_type: Geometry,
+  output_type: Blueprint,
   xs: range1,
   f: @pattern
 }
 ```
+
+`map` is lazy: its output is an `Iter[T]`. Wire it into
+`collect { iter: map1, element_type: Blueprint }` to get an array; `collect`'s
+`element_type` (default `Int`) must match the stream's.
 
 ## Complete Node Reference
 
@@ -626,16 +782,17 @@ range1 = range { start: 0, step: 1, count: 10 }
 # Expression evaluator
 expr1 = expr {
   expression: "x * 2 + 1",
-  parameters: [{ name: "x", type: Int }]
+  parameters: [{ name: "x", data_type: Int }]
 }
 
-# Higher-order map
+# Higher-order map (lazy: outputs Iter[Blueprint]; collect it into an array)
 map1 = map {
   input_type: Int,
-  output_type: Geometry,
+  output_type: Blueprint,
   xs: range1,
   f: @some_function
 }
+all1 = collect { iter: map1, element_type: Blueprint }
 
 # Network parameter (for custom nodes)
 param1 = parameter {
@@ -651,71 +808,76 @@ param1 = parameter {
 rect1 = rect { min_corner: (0, 0), extent: (5, 3) }
 circle1 = circle { center: (0, 0), radius: 5 }
 polygon1 = polygon { vertices: [(0, 0), (3, 0), (1, 2)] }
-reg_poly1 = reg_poly { center: (0, 0), radius: 5, num_sides: 6 }
-half_plane1 = half_plane { p1: (0, 0), p2: (1, 0) }
+reg_poly1 = reg_poly { radius: 5, num_sides: 6 }
+half_plane1 = half_plane { point1: (0, 0), point2: (1, 0) }
 
 union2d1 = union_2d { shapes: [rect1, circle1] }
 intersect2d1 = intersect_2d { shapes: [rect1, circle1] }
 diff2d1 = diff_2d { base: rect1, sub: circle1 }
 ```
 
+The 2D primitives take an optional `d_plane` (a `DrawingPlane`, from the
+`drawing_plane` node); unconnected, they draw on the XY plane.
+
 ### 3D Geometry Nodes
+
+All of these output a `Blueprint`. The lattice primitives take integer lattice
+coordinates and an optional `structure` input (default: cubic diamond).
 
 ```
 cuboid1 = cuboid { min_corner: (0, 0, 0), extent: (3, 3, 3) }
 sphere1 = sphere { center: (0, 0, 0), radius: 5 }
-half_space1 = half_space { center: (0, 0, 0), miller_index: (1, 0, 0), shift: 0 }
+free_sphere1 = free_sphere { center: (0.0, 0.0, 0.0), radius: 7.5 }   # Cartesian Å
+half_space1 = half_space { m_index: (1, 0, 0), center: (0, 0, 0), shift: 0 }
 
-extrude1 = extrude { shape_2d: rect1, z_min: 0, z_max: 5 }
+extrude1 = extrude { shape: rect1, height: 5 }
 
 union1 = union { shapes: [sphere1, cuboid1] }
 intersect1 = intersect { shapes: [sphere1, cuboid1] }
 diff1 = diff { base: sphere1, sub: cuboid1 }
 
-lattice_move1 = lattice_move { geometry: sphere1, offset: (1, 0, 0) }
-lattice_rot1 = lattice_rot { geometry: sphere1, rotation_index: 0 }
+# Discrete lattice moves (Blueprint or Crystal)
+moved1 = structure_move { input: sphere1, translation: (1, 0, 0) }
+rotated1 = structure_rot { input: sphere1, axis_index: 0, step: 1 }
 ```
 
 ### Atomic Structure Nodes
 
 ```
-# Unit cell definition
-uc1 = unit_cell { a: 3.567, b: 3.567, c: 3.567, alpha: 90, beta: 90, gamma: 90 }
-
-# Motif definition
+# Crystal structure: lattice vectors + motif
+lv1 = lattice_vecs { cell_length_a: 5.43, cell_length_b: 5.43, cell_length_c: 5.43 }
 motif1 = motif {
   definition: """
     PARAM PRIMARY C
     PARAM SECONDARY C
     SITE CORNER PRIMARY 0 0 0
-    SITE FACE_Z PRIMARY 0.5 0.5 0
+    SITE INTERIOR1 SECONDARY 0.25 0.25 0.25
+    BOND INTERIOR1 ...CORNER
   """
 }
+st1 = structure { lattice_vecs: lv1, motif: motif1 }
+shape1 = sphere { radius: 3, structure: st1 }
 
-# Fill geometry with atoms
-fill1 = atom_fill {
-  shape: sphere1,
-  motif: motif1,
+# Carve atoms out of a Blueprint (Blueprint -> Crystal)
+crystal1 = materialize {
+  shape: shape1,
   parameter_element_value_definition: """
     PRIMARY Si
     SECONDARY C
   """,
-  m_offset: (0.0, 0.0, 0.0),
   passivate: true,
   rm_single: false,
   surf_recon: false
 }
 
-# Transform atomic structure
-trans1 = atom_trans {
-  molecule: fill1,
-  translation: (10.0, 0.0, 0.0),
-  rotation: (0.0, 0.0, 0.0, 1.0)
-}
+# Continuous moves need a Molecule: leave the lattice first
+mol1 = exit_structure { input: crystal1 }
+moved_mol1 = free_move { input: mol1, translation: (10.0, 0.0, 0.0) }
+rotated_mol1 = free_rot { input: moved_mol1, angle_degrees: 90.0, rot_axis: (0.0, 0.0, 1.0) }
 
 # Import/export
-import1 = import_xyz { filename: "molecule.xyz" }
-export1 = export_atoms { molecule: fill1, file_name: "output.xyz" }
+import1 = import_xyz { file_name: "molecule.xyz" }
+export1 = export_atoms { molecule: rotated_mol1, file_name: "output.xyz" }
 ```
 
 ## Edit Semantics
@@ -736,7 +898,7 @@ When processing an edit command in incremental mode:
 | Statement | Name Exists? | Effect |
 |-----------|--------------|--------|
 | `sphere1 = sphere { radius: 4.0 }` | Yes | Update properties |
-| `cylinder1 = cylinder { ... }` | No | Create new node |
+| `box2 = cuboid { ... }` | No | Create new node |
 | `union1 = union { shapes: [a, b] }` | Yes, inputs changed | Set the pin's wires to exactly `a` and `b` |
 | `sphere1 = sphere { radius: 4.0 }` | Yes, `radius` was wired | Disconnect `radius`, store `4.0` |
 | `union1 = union { shapes: [] }` | Yes | Disconnect the pin |
@@ -785,6 +947,8 @@ atomcad-cli edit --replace --code="sphere1 = sphere { radius: 10 }"
 ```
 document     := statement*
 statement    := assignment | output-stmt | delete-stmt | description | summary
+             |  layout-stmt
+layout-stmt  := ('place' | 'arrange' | 'straighten') …   # see Layout Statements
 assignment   := path '=' type '{' block-items '}'
 output-stmt  := 'output' path
 delete-stmt  := 'delete' path
@@ -798,16 +962,16 @@ value        := literal | source-ref | array | object
 source-ref   := '^'* ( '$' name | '@' name | name ('.' name)? )
 literal      := bool | int | float | string | vector
 bool         := 'true' | 'false'
-int          := [+-]? digit+
-float        := [+-]? digit* '.' digit+ ([eE] [+-]? digit+)?
-             |  digit+ [eE] [+-]? digit+
+int          := '-'? digit+
+float        := '-'? digit+ '.' digit+ ([eE] [+-]? digit+)?
+             |  '-'? digit+ [eE] [+-]? digit+
 string       := '"' chars '"' | '"""' multiline-chars '"""'
 vector       := '(' number ',' number (',' number)? ')'
 array        := '[' (value (',' value)*)? ']'
 object       := '{' props '}'
 props        := (prop (',' prop)* ','?)?
 name         := [a-zA-Z_][a-zA-Z0-9_]* | '`' relaxed-chars '`'
-type         := [a-z][a-z0-9_]*
+type         := name                # a built-in node type or a custom network
 number       := int | float
 ```
 
@@ -842,14 +1006,15 @@ output diff1
 ### Atomic Structure
 
 ```
-# Custom unit cell
-uc1 = unit_cell { a: 5.43, b: 5.43, c: 5.43, alpha: 90, beta: 90, gamma: 90 }
+# Silicon lattice: 5.43 Å cubic cell, default (zincblende) motif
+lv1 = lattice_vecs { cell_length_a: 5.43, cell_length_b: 5.43, cell_length_c: 5.43 }
+st1 = structure { lattice_vecs: lv1 }
 
-# Geometry
-sphere1 = sphere { center: (0, 0, 0), radius: 5, unit_cell: uc1 }
+# Geometry, in lattice units of that cell
+sphere1 = sphere { center: (0, 0, 0), radius: 5, structure: st1 }
 
 # Fill with silicon (visible - final atomic structure)
-fill1 = atom_fill {
+fill1 = materialize {
   shape: sphere1,
   parameter_element_value_definition: """
     PRIMARY Si
@@ -866,7 +1031,7 @@ output fill1
 
 ```
 # atom_edit exposes two output pins: "result" (pin 0) and "diff" (pin 1)
-edit1 = atom_edit { base: imported }
+edit1 = atom_edit { molecule: imported }
 
 # Re-apply the same diff to a different base
 applied = apply_diff { base: other_base, diff: edit1.diff, visible: true }
@@ -880,45 +1045,50 @@ output applied
 # Create a range of integers
 range1 = range { start: 0, step: 1, count: 5 }
 
-# Define gap parameter for the pattern
+# `pattern` is an instance of a custom network with inputs (index: Int, gap: Int).
+# Wiring `gap` bakes it in; the unwired `index` stays a parameter, so
+# @pattern is an `Int -> Blueprint` function.
 gap_value = int { value: 3 }
+pattern1 = pattern { gap: gap_value }
 
-# Map the pattern function over the range
-# @pattern references the "pattern" network's function pin
-result = map {
+# Map the function over the range (lazy), then collect the stream
+shapes = map {
   input_type: Int,
-  output_type: Geometry,
+  output_type: Blueprint,
   xs: range1,
-  f: @pattern
+  f: @pattern1
 }
-
-# pattern.gap will be bound to gap_value when the function is created
-# This is partial application / closure creation
+all = collect { iter: shapes, element_type: Blueprint }
+result = union { shapes: all, visible: true }
 
 output result
 ```
 
 ## Implementation Notes
 
-### Name Generation (Query)
+### Names (Query)
 
 When serializing a network to text:
-- Names are generated as `{typename}{counter}` (e.g., `sphere1`, `sphere2`)
+- Each node is printed under its own name (its `custom_name`, see
+  [Assignments](#assignments)). A node added in the GUI is named
+  `{typename}{counter}` (e.g., `sphere1`, `sphere2`) when it is created.
 - Nodes are output in topological order (dependencies before dependents)
-- Counter is per-type and increments in topological order
 
 ### Name Resolution (Edit)
 
 When parsing an edit command:
 - Names must match existing nodes or be new
 - Forward references within the same edit are allowed
-- Circular references are an error
+- Circular references are a validation error (`Wire cycle detected among: …`)
 
 ### Node Positions
 
-Node positions (layout) are **not exposed** in this format:
-- The LLM edits semantics (data flow), not visual layout
-- New nodes are placed automatically
+Node positions are **not part of** the network text:
+- `query` prints no coordinates; `atomcad-cli query --layout` reports the
+  drawing separately
+- An edit can say where nodes go with the layout statements (`place`,
+  `arrange`, `straighten`), which act once and are never stored
+- New nodes no statement places are placed automatically
 - Users can manually reorganize after AI edits
 
 Because a position can never be *written*, it can only be **carried**. Before an

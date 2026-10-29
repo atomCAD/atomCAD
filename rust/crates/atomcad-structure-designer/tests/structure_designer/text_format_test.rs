@@ -1962,6 +1962,145 @@ mod node_type_introspection_tests {
         assert!(result.contains("default: diamond"));
     }
 
+    /// The line `describe` prints for one input of `node`.
+    fn input_line(result: &str, input: &str) -> String {
+        result
+            .lines()
+            .find(|l| l.trim_start().starts_with(&format!("{} ", input)))
+            .unwrap_or_else(|| panic!("no input line for '{}' in:\n{}", input, result))
+            .to_string()
+    }
+
+    #[test]
+    fn test_describe_literal_key_pins_are_optional_and_take_literals() {
+        // `collect` writes `limit` / `offset` only once set, so the fresh node
+        // describe reads lists neither; `text_literal_keys_with_defs` and the
+        // parameter metadata must still mark them optional and literal-able.
+        let registry = create_test_registry();
+        let result = describe_node_type("collect", &registry);
+        for (input, default) in [("limit", "no limit"), ("offset", "0")] {
+            let line = input_line(&result, input);
+            assert!(
+                line.contains(&format!("[default: {}]", default)),
+                "{}",
+                line
+            );
+            assert!(!line.contains("wire-only"), "{}", line);
+        }
+
+        let result = describe_node_type("import_cif", &registry);
+        assert!(input_line(&result, "file_name").contains("[required]"));
+        for input in [
+            "block_name",
+            "use_cif_bonds",
+            "infer_bonds",
+            "bond_tolerance",
+        ] {
+            let line = input_line(&result, input);
+            assert!(line.contains("[default: "), "{}", line);
+            assert!(!line.contains("wire-only"), "{}", line);
+        }
+
+        let result = describe_node_type("import_cube", &registry);
+        assert!(input_line(&result, "file_name").contains("[required]"));
+
+        let result = describe_node_type("infer_bonds", &registry);
+        for (input, default) in [("additive", "false"), ("bond_tolerance", "1.15")] {
+            let line = input_line(&result, input);
+            assert!(
+                line.contains(&format!("[default: {}]", default)),
+                "{}",
+                line
+            );
+        }
+    }
+
+    #[test]
+    fn test_describe_optional_wire_only_pins_are_not_required() {
+        let registry = create_test_registry();
+        for (node, inputs) in [
+            ("export_atoms", &["metadata"][..]),
+            ("export_build_script", &["metadata"][..]),
+            ("mechanosynth", &["ops", "steps", "feedstocks", "tools"][..]),
+            ("mechanosynth_edit", &["steps", "feedstocks", "tools"][..]),
+        ] {
+            let result = describe_node_type(node, &registry);
+            for input in inputs {
+                let line = input_line(&result, input);
+                assert!(!line.contains("required"), "{}: {}", node, line);
+            }
+        }
+    }
+
+    #[test]
+    fn test_describe_lattice_vecs_basis_pins_are_optional() {
+        let registry = create_test_registry();
+        let result = describe_node_type("lattice_vecs", &registry);
+        for input in ["a", "b", "c"] {
+            let line = input_line(&result, input);
+            assert!(
+                line.contains("[default: from the cell parameters, wire-only]"),
+                "{}",
+                line
+            );
+        }
+    }
+
+    #[test]
+    fn test_describe_product_names_the_unchosen_record() {
+        let registry = create_test_registry();
+        let result = describe_node_type("product", &registry);
+        assert!(
+            result.contains("Output: Iter[Record(<target>)]"),
+            "{}",
+            result
+        );
+        assert!(!result.contains("Record(``)"), "{}", result);
+    }
+
+    #[test]
+    fn test_no_builtin_description_names_a_removed_node() {
+        // Nodes deleted by the lattice-space refactoring; a description that
+        // still points users at them is wrong.
+        let registry = create_test_registry();
+        for (name, node_type) in &registry.built_in_node_types {
+            for removed in ["atom_fill", "atom_trans", "lattice_move", "lattice_rot"] {
+                assert!(
+                    !node_type.description.contains(removed),
+                    "description of '{}' mentions removed node '{}'",
+                    name,
+                    removed
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_motif_description_examples_parse() {
+        // The code blocks of the `motif` description, minus the `<…>` syntax
+        // lines, form one motif; a stale or malformed example (a trailing
+        // comment, an undefined site) fails to parse.
+        let registry = create_test_registry();
+        let description = &registry.built_in_node_types["motif"].description;
+        let mut text = String::new();
+        for (i, block) in description.split("```").enumerate() {
+            if i % 2 == 1 {
+                for line in block.lines().filter(|l| !l.contains('<')) {
+                    text.push_str(line);
+                    text.push('\n');
+                }
+            }
+        }
+        assert!(
+            text.contains("BOND"),
+            "no examples found in:\n{}",
+            description
+        );
+        if let Err(e) = atomcad_crystolecule::motif_parser::parse_motif(&text) {
+            panic!("motif description examples do not parse: {}\n{}", e, text);
+        }
+    }
+
     #[test]
     fn test_describe_node_type_unknown() {
         let registry = create_test_registry();
@@ -4231,6 +4370,53 @@ mod literal_disconnect_tests {
             .get(param_index)
             .map(|a| a.incoming_wires.len())
             .unwrap_or(0)
+    }
+
+    #[test]
+    fn literal_on_pin_with_unset_optional_property_is_stored() {
+        // `collect.limit` and `import_cif`'s properties are written only once
+        // set, so a fresh node lists none of them; their literals must still
+        // be stored (through `text_literal_keys_with_defs`), not dropped as
+        // wire-only.
+        let registry = create_test_registry();
+        let mut network = create_test_network();
+
+        let result = edit_network(
+            &mut network,
+            &registry,
+            r#"
+            r = range { start: 0, count: 10 }
+            c = collect { iter: r, limit: 3, offset: 2 }
+            cif = import_cif { file_name: "x.cif", block_name: "b1", bond_tolerance: 1.3 }
+            cube = import_cube { file_name: "x.cube" }
+            ib = infer_bonds { additive: true, bond_tolerance: 1.4 }
+        "#,
+            true,
+        );
+        assert!(
+            result.warnings.is_empty(),
+            "no warnings expected, got: {:?}",
+            result.warnings
+        );
+
+        let serialized = serialize_network(&network, &registry, None);
+        for expected in [
+            "limit: 3",
+            "offset: 2",
+            "file_name: \"x.cif\"",
+            "block_name: \"b1\"",
+            "bond_tolerance: 1.3",
+            "file_name: \"x.cube\"",
+            "additive: true",
+            "bond_tolerance: 1.4",
+        ] {
+            assert!(
+                serialized.contains(expected),
+                "expected `{}` in:\n{}",
+                expected,
+                serialized
+            );
+        }
     }
 
     #[test]

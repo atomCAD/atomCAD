@@ -167,41 +167,46 @@ pub fn motif_data_loader(
 pub fn get_node_type() -> NodeType {
     NodeType {
       name: "motif".to_string(),
-      description: "Produces a `Motif` value for use with `atom_fill` to populate geometry with atoms.
+      description: "Produces a `Motif` value: the atom sites and bonds repeated in every unit cell. Wire it into a `structure` node, whose `Structure` is then carved into atoms by `materialize`.
 
 ## Motif Definition Language
 
-Three commands define a motif:
+Three commands define a motif (commands are case-insensitive):
 
-**PARAM** - Define parameter elements (can be overridden in atom_fill):
+**PARAM** - Define a parameter element, with an optional default element (C if omitted). Parameter elements can be overridden downstream by `materialize` or `motif_sub`:
 ```
+PARAM <name> [<default_element>]
 PARAM PRIMARY C
 PARAM SECONDARY C
 ```
 
-**SITE** - Define atomic sites with fractional coordinates (0-1):
+**SITE** - Define an atomic site with fractional coordinates. The element is a chemical element or a declared parameter:
 ```
 SITE <id> <element> <frac_x> <frac_y> <frac_z>
 SITE CORNER PRIMARY 0 0 0
 SITE FACE_X PRIMARY 0 0.5 0.5
 SITE INTERIOR1 SECONDARY 0.25 0.25 0.25
+SITE INTERIOR2 SECONDARY 0.25 0.75 0.75
 ```
 
-**BOND** - Define bonds between sites:
+**BOND** - Define a bond between two sites, with an optional positive multiplicity (default 1):
 ```
-BOND <site1> <relative_cell_prefix><site2>
+BOND <site1> [<relative_cell_prefix>]<site2> [<multiplicity>]
 ```
-The prefix is 3 characters for (x,y,z) directions: `.` = same cell, `+` = next cell, `-` = previous cell.
-First site must be in current cell (prefix `...` or omitted).
+The prefix is 3 characters for (x,y,z) directions: `.` = same cell, `+` = next cell, `-` = previous cell; omitting it means `...`.
+The first site must be in the current cell (prefix `...` or omitted).
 
 Examples:
 ```
-BOND INTERIOR1 ...CORNER      # same cell
-BOND INTERIOR2 .++CORNER      # y+1, z+1 cell
-BOND INTERIOR3 +..FACE_X      # x+1 cell
+# same cell
+BOND INTERIOR1 ...CORNER
+# second site in the y+1, z+1 cell
+BOND INTERIOR2 .++CORNER
+# second site in the x+1 cell
+BOND INTERIOR1 +..FACE_X
 ```
 
-Lines starting with `#` are comments.".to_string(),
+Lines starting with `#` are comments. A comment must be on its own line: text after a command on the same line is read as extra arguments.".to_string(),
       summary: None,
       category: NodeTypeCategory::OtherBuiltin,
       parameters: vec![],

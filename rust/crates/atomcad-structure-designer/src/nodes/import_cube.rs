@@ -32,7 +32,7 @@ use crate::node_data::{EvalOutput, NodeData, NodeDataError};
 use crate::node_network_gadget::NodeNetworkGadget;
 use crate::node_type::NodeTypeCategory;
 use crate::node_type::{NodeType, OutputPinDefinition, Parameter};
-use crate::node_type_registry::NodeTypeRegistry;
+use crate::node_type_registry::{NodeTypeRegistry, RecordDefs};
 use crate::structure_designer::StructureDesigner;
 use crate::text_format::TextValue;
 use atomcad_crystolecule::atomic_structure::AtomicStructure;
@@ -257,6 +257,19 @@ impl NodeData for ImportCubeData {
             .as_ref()
             .and_then(|loaded| loaded.units_warning.clone())
             .map(NodeDataError::warning)
+    }
+
+    /// `file_name` is written only once set, so a fresh node lists it not;
+    /// without this the text format would read the pin as wire-only and drop
+    /// its literal.
+    fn text_literal_keys_with_defs(&self, _defs: RecordDefs<'_>) -> Vec<String> {
+        vec!["file_name".to_string()]
+    }
+
+    fn get_parameter_metadata(&self) -> HashMap<String, (bool, Option<String>)> {
+        let mut m = HashMap::new();
+        m.insert("file_name".to_string(), (true, None));
+        m
     }
 
     fn get_text_properties(&self) -> Vec<(String, TextValue)> {

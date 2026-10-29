@@ -10,7 +10,7 @@ use crate::node_type::NodeTypeCategory;
 use crate::node_type::{
     NodeType, OutputPinDefinition, Parameter, generic_node_data_loader, generic_node_data_saver,
 };
-use crate::node_type_registry::NodeTypeRegistry;
+use crate::node_type_registry::{NodeTypeRegistry, RecordDefs};
 use crate::structure_designer::StructureDesigner;
 use crate::text_format::TextValue;
 use serde::{Deserialize, Serialize};
@@ -185,6 +185,20 @@ impl NodeData for CollectData {
 
     fn clone_box(&self) -> Box<dyn NodeData> {
         Box::new(self.clone())
+    }
+
+    /// `limit` and `offset` are written only when set, so a fresh node lists
+    /// neither; without this the text format would read both as wire-only and
+    /// drop their literals.
+    fn text_literal_keys_with_defs(&self, _defs: RecordDefs<'_>) -> Vec<String> {
+        vec!["limit".to_string(), "offset".to_string()]
+    }
+
+    fn get_parameter_metadata(&self) -> HashMap<String, (bool, Option<String>)> {
+        let mut m = HashMap::new();
+        m.insert("limit".to_string(), (false, Some("no limit".to_string())));
+        m.insert("offset".to_string(), (false, Some("0".to_string())));
+        m
     }
 
     fn get_subtitle(

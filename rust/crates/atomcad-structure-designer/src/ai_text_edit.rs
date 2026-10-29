@@ -30,8 +30,8 @@ use crate::scoped_validation_errors::{collect_scoped_validation_errors, error_no
 use crate::serialization::node_networks_serialization::node_network_to_serializable;
 use crate::structure_designer::StructureDesigner;
 use crate::text_format::{
-    EditResult, NamePath, PositionSnapshot, edit_network as text_edit_network, serialize_network,
-    snapshot_node_positions, unique_node_names,
+    EditResult, NamePath, PositionSnapshot, edit_network_with_layout as text_edit_network,
+    serialize_network, snapshot_node_positions, unique_node_names,
 };
 use crate::undo::UndoRefreshMode;
 use crate::undo::commands::text_edit_network::TextEditNetworkCommand;
@@ -248,8 +248,11 @@ impl StructureDesigner {
             return self.reject_ai_edit(network_name, code, replace, dry_run, vec![message]);
         }
 
-        // Apply the edit commands
-        let mut result = text_edit_network(&mut network, &self.node_type_registry, code, replace);
+        // Apply the edit commands. The layout statements come back beside the
+        // result: the editor does not act on them, the layout pass below does
+        // (`doc/design_deliberate_node_placement.md` A2).
+        let (mut result, layout_statements) =
+            text_edit_network(&mut network, &self.node_type_registry, code, replace);
 
         // Whether the statements parsed and applied. The gates below are about
         // *what the editor did*, so they keep asking this — `result.success` is
@@ -321,12 +324,13 @@ impl StructureDesigner {
             unsafe {
                 if let Some(network) = self.node_type_registry.node_networks.get_mut(&network_name)
                 {
-                    incremental = layout::layout_incremental(
+                    incremental = layout::layout_incremental_with_statements(
                         network,
                         &*registry_ptr,
                         &before_positions,
                         &before_wires,
                         algorithm,
+                        &layout_statements,
                     );
                 }
             }
@@ -393,6 +397,10 @@ impl StructureDesigner {
                 None => (String::new(), LayoutOutcome::default()),
             };
         layout_outcome.attach_causes(&incremental.report);
+        // A script of layout statements alone changes no text, but it moves
+        // nodes: that is a change, which needs its undo step and dirty flag.
+        let layout_moved =
+            !incremental.report.moved.is_empty() || !incremental.report.placed.is_empty();
         // The report travels to the AI only when it has something to say.
         let layout_report =
             (ran_layout && incremental.report.is_worth_reporting()).then_some(incremental.report);
@@ -476,6 +484,7 @@ impl StructureDesigner {
         // unrecoverable — the opposite of what that phase was for.
         let made_changes = edit_applied
             && (text_changed
+                || layout_moved
                 || !result.nodes_created.is_empty()
                 || !result.nodes_updated.is_empty()
                 || !result.nodes_deleted.is_empty()

@@ -1,5 +1,6 @@
 use super::text_value::TextValue;
 use crate::data_type::{DataType, FunctionType, RecordType};
+use crate::layout::common::Gap;
 use glam::{DVec2, DVec3, IVec2, IVec3};
 use std::fmt;
 
@@ -136,7 +137,175 @@ pub enum Statement {
     Summary { text: String },
     /// Comment: `# comment text`
     Comment(String),
+    /// A layout statement: `place …`, `arrange […]` or `straighten […]`
+    /// (`doc/design_deliberate_node_placement.md` A2). An instruction to the
+    /// layout pass, carried out once and never stored: the editor hands it
+    /// back beside its `EditResult` and the serializer never prints one.
+    Layout(LayoutStatement),
 }
+
+// ============================================================================
+// Layout statements
+// ============================================================================
+
+/// A node a layout statement names: a path relative to the scope the
+/// statement is written in (`d`, or `m1/d` from outside `m1`).
+#[derive(Debug, Clone, PartialEq)]
+pub struct LayoutNodeRef {
+    pub scope_path: Vec<String>,
+    pub name: String,
+}
+
+impl LayoutNodeRef {
+    /// The path as written, `m1/d`.
+    pub fn display(&self) -> String {
+        let mut parts = self.scope_path.clone();
+        parts.push(self.name.clone());
+        parts.join("/")
+    }
+}
+
+/// Which way `push` moves what a statement lands on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum PushDir {
+    Up,
+    Down,
+    Right,
+}
+
+impl PushDir {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            PushDir::Up => "up",
+            PushDir::Down => "down",
+            PushDir::Right => "right",
+        }
+    }
+}
+
+/// `[…] column` or `[…] row`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GroupKind {
+    Column,
+    Row,
+}
+
+/// What a `place` statement positions.
+#[derive(Debug, Clone, PartialEq)]
+pub enum LayoutSubject {
+    /// One node.
+    Node(LayoutNodeRef),
+    /// `[a, b] column (gap: G)` / `row`: the members stacked in written order,
+    /// then placed as one box.
+    Group {
+        members: Vec<LayoutNodeRef>,
+        kind: GroupKind,
+        gap: Gap,
+    },
+    /// `[a, b]` with neither `column` nor `row`, which only `by` takes: the
+    /// nodes move rigidly, as they stand.
+    List(Vec<LayoutNodeRef>),
+}
+
+impl LayoutSubject {
+    /// Every node the subject names, in written order.
+    pub fn members(&self) -> Vec<&LayoutNodeRef> {
+        match self {
+            LayoutSubject::Node(node) => vec![node],
+            LayoutSubject::Group { members, .. } | LayoutSubject::List(members) => {
+                members.iter().collect()
+            }
+        }
+    }
+}
+
+/// What a clause measures against.
+#[derive(Debug, Clone, PartialEq)]
+pub enum LayoutTargets {
+    /// The extent of every node in the scope, measured when the statement runs.
+    All,
+    /// `a` or `a and b`: the bounding box of all of them.
+    Nodes(Vec<LayoutNodeRef>),
+}
+
+/// `right_of` / `left_of` / `above` / `below`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LayoutDirection {
+    RightOf,
+    LeftOf,
+    Above,
+    Below,
+}
+
+/// The edge of `<edge>_even_with`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LayoutEdge {
+    Top,
+    Bottom,
+    Left,
+    Right,
+}
+
+/// One relation of a `place` statement.
+#[derive(Debug, Clone, PartialEq)]
+pub enum LayoutClause {
+    /// `right_of T (gap: G, dx: n, dy: n)`. `gap: None` is the default
+    /// `normal` gap.
+    Direction {
+        direction: LayoutDirection,
+        targets: LayoutTargets,
+        gap: Option<Gap>,
+        dx: f64,
+        dy: f64,
+    },
+    /// `top_even_with T`, …
+    EvenWith {
+        edge: LayoutEdge,
+        targets: LayoutTargets,
+    },
+    /// `straight_from S`: the wire from `S` into the subject runs horizontal.
+    StraightFrom(LayoutNodeRef),
+    /// `straight_to D`: the wire from the subject into `D` runs horizontal.
+    StraightTo(LayoutNodeRef),
+}
+
+/// Where a `place` statement puts its subject.
+#[derive(Debug, Clone, PartialEq)]
+pub enum PlaceSpec {
+    /// `at (x, y)`: the subject's top-left corner.
+    At(DVec2),
+    /// `by (dx, dy)`: an offset from where the nodes stand when it runs.
+    By(DVec2),
+    /// One or more relations, each axis stated once.
+    Clauses(Vec<LayoutClause>),
+}
+
+/// The three statement kinds.
+#[derive(Debug, Clone, PartialEq)]
+pub enum LayoutOp {
+    Place {
+        subject: LayoutSubject,
+        spec: PlaceSpec,
+    },
+    Arrange(Vec<LayoutNodeRef>),
+    Straighten(Vec<LayoutNodeRef>),
+}
+
+/// One layout statement, with what the report needs to name it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct LayoutStatement {
+    /// 1-based line of the edit script the statement starts on.
+    pub line: usize,
+    /// The statement as written (its source line, comment stripped).
+    pub text: String,
+    pub op: LayoutOp,
+    /// `push <dir>`, if written.
+    pub push: Option<PushDir>,
+}
+
+/// The heads that open a layout statement — when no `=` follows, so a node
+/// named `place` is still assignable.
+pub const LAYOUT_STATEMENT_HEADS: [&str; 3] = ["place", "arrange", "straighten"];
 
 /// A property value can be a literal or a reference
 #[derive(Debug, Clone)]
@@ -734,17 +903,27 @@ impl Lexer {
 pub struct Parser {
     tokens: Vec<TokenInfo>,
     pos: usize,
+    /// The source, by line, when the parser was given it ([`Parser::parse`]).
+    /// Layout statements need it twice: to report themselves as written, and
+    /// to tell a backtick-quoted `` `all` `` (a node) from the bare `all`
+    /// (the pseudo-target) — the lexer yields the same identifier for both.
+    source: Vec<Vec<char>>,
 }
 
 impl Parser {
     pub fn new(tokens: Vec<TokenInfo>) -> Self {
-        Self { tokens, pos: 0 }
+        Self {
+            tokens,
+            pos: 0,
+            source: Vec::new(),
+        }
     }
 
     /// Parse the entire input and return a list of statements
     pub fn parse(input: &str) -> Result<Vec<Statement>, ParseError> {
         let tokens = Lexer::tokenize(input)?;
         let mut parser = Self::new(tokens);
+        parser.source = input.split('\n').map(|l| l.chars().collect()).collect();
         parser.parse_statements()
     }
 
@@ -887,6 +1066,9 @@ impl Parser {
                 }
                 Token::Summary => {
                     statements.push(self.parse_summary_statement()?);
+                }
+                Token::Identifier(_) if self.at_layout_head() => {
+                    statements.push(self.parse_layout_statement()?);
                 }
                 Token::Identifier(_) => {
                     statements.push(self.parse_assignment()?);
@@ -1662,5 +1844,342 @@ impl Parser {
                 ))
             }
         }
+    }
+}
+
+// ============================================================================
+// Layout statement grammar
+// ============================================================================
+
+impl Parser {
+    /// Whether the cursor is on a layout statement head: `place`, `arrange` or
+    /// `straighten`, unquoted, and **not** followed by `=` or `/` (which would
+    /// make it an assignment to, or a path through, a node of that name).
+    fn at_layout_head(&self) -> bool {
+        matches!(self.peek(), Token::Identifier(n) if LAYOUT_STATEMENT_HEADS.contains(&n.as_str()))
+            && !self.is_quoted(self.pos)
+            && !matches!(self.peek_ahead(1), Token::Equals | Token::Slash)
+    }
+
+    /// Whether the token at `index` was written backtick-quoted.
+    fn is_quoted(&self, index: usize) -> bool {
+        let Some(info) = self.tokens.get(index) else {
+            return false;
+        };
+        self.source
+            .get(info.line.wrapping_sub(1))
+            .and_then(|line| line.get(info.column.wrapping_sub(1)))
+            == Some(&'`')
+    }
+
+    /// Whether the cursor is on the unquoted keyword `word`.
+    fn at_word(&self, word: &str) -> bool {
+        matches!(self.peek(), Token::Identifier(n) if n == word) && !self.is_quoted(self.pos)
+    }
+
+    /// The source line a statement starts on, without its trailing comment.
+    fn statement_text(&self, line: usize) -> String {
+        let Some(chars) = self.source.get(line.wrapping_sub(1)) else {
+            return String::new();
+        };
+        let mut out = String::new();
+        let mut quoted = false;
+        for &ch in chars {
+            match ch {
+                '`' => quoted = !quoted,
+                '#' if !quoted => break,
+                _ => {}
+            }
+            out.push(ch);
+        }
+        out.trim().to_string()
+    }
+
+    fn error_here(&self, message: impl Into<String>) -> ParseError {
+        let (line, col) = self.current_position();
+        ParseError::new(message, line, col)
+    }
+
+    /// `place …`, `arrange […]` or `straighten […]`, then an optional
+    /// `push <dir>`. Every grammar error here rejects the whole edit (D8).
+    fn parse_layout_statement(&mut self) -> Result<Statement, ParseError> {
+        let (line, _) = self.current_position();
+        let head = self.expect_identifier()?;
+        let op = match head.as_str() {
+            "place" => self.parse_place()?,
+            "arrange" => LayoutOp::Arrange(self.parse_node_list()?),
+            "straighten" => LayoutOp::Straighten(self.parse_node_list()?),
+            _ => unreachable!("at_layout_head admits only the three heads"),
+        };
+
+        let mut push = None;
+        while self.at_word("push") {
+            if push.is_some() {
+                return Err(self.error_here("`push` is written at most once per statement"));
+            }
+            self.bump();
+            let word = match self.peek().clone() {
+                Token::Identifier(word) => word,
+                other => {
+                    return Err(self.error_here(format!(
+                        "Expected `up`, `down` or `right` after `push`, found {other:?}"
+                    )));
+                }
+            };
+            let dir = match word.as_str() {
+                "up" => PushDir::Up,
+                "down" => PushDir::Down,
+                "right" => PushDir::Right,
+                "left" => {
+                    return Err(self.error_here(
+                        "there is no `push left`: to make room before a node, place after its predecessor and `push right`",
+                    ));
+                }
+                other => {
+                    return Err(self.error_here(format!(
+                        "Expected `up`, `down` or `right` after `push`, found `{other}`"
+                    )));
+                }
+            };
+            self.bump();
+            push = Some(dir);
+        }
+
+        match self.peek() {
+            Token::Newline | Token::Eof | Token::Hash | Token::RightBrace => {}
+            other => {
+                return Err(
+                    self.error_here(format!("Unexpected {other:?} in a `{head}` statement"))
+                );
+            }
+        }
+
+        Ok(Statement::Layout(LayoutStatement {
+            line,
+            text: self.statement_text(line),
+            op,
+            push,
+        }))
+    }
+
+    /// `place <subject> at (x, y)` / `by (dx, dy)` / `<clause> [, <clause>]`.
+    fn parse_place(&mut self) -> Result<LayoutOp, ParseError> {
+        let subject = self.parse_layout_subject()?;
+
+        let spec = if self.at_word("at") || self.at_word("by") {
+            let by = self.at_word("by");
+            self.bump();
+            let point = self.parse_layout_point()?;
+            if self.peek() == &Token::Comma {
+                return Err(self.error_here(format!(
+                    "`{}` cannot be combined with a clause",
+                    if by { "by" } else { "at" }
+                )));
+            }
+            if by {
+                if matches!(subject, LayoutSubject::Group { .. }) {
+                    return Err(self.error_here(
+                        "`by` moves nodes as they stand: write the list without `column` / `row`",
+                    ));
+                }
+                PlaceSpec::By(point)
+            } else {
+                PlaceSpec::At(point)
+            }
+        } else {
+            let mut clauses = vec![self.parse_layout_clause()?];
+            while self.peek() == &Token::Comma {
+                self.bump();
+                if self.at_word("at") || self.at_word("by") {
+                    return Err(self.error_here("`at` / `by` cannot be combined with a clause"));
+                }
+                clauses.push(self.parse_layout_clause()?);
+            }
+            PlaceSpec::Clauses(clauses)
+        };
+
+        if matches!(subject, LayoutSubject::List(_)) && !matches!(spec, PlaceSpec::By(_)) {
+            return Err(self.error_here(
+                "a list is placed as a `column` or a `row`; only `by` moves a plain list",
+            ));
+        }
+        Ok(LayoutOp::Place { subject, spec })
+    }
+
+    /// `name`, `m1/name`, `[a, b]`, or `[a, b] column|row [(gap: G)]`.
+    fn parse_layout_subject(&mut self) -> Result<LayoutSubject, ParseError> {
+        if self.peek() != &Token::LeftBracket {
+            return Ok(LayoutSubject::Node(self.parse_layout_node()?));
+        }
+        let members = self.parse_node_list()?;
+        let kind = if self.at_word("column") {
+            GroupKind::Column
+        } else if self.at_word("row") {
+            GroupKind::Row
+        } else {
+            return Ok(LayoutSubject::List(members));
+        };
+        self.bump();
+        let mut gap = Gap::Normal;
+        if self.peek() == &Token::LeftParen {
+            self.bump();
+            let key = self.expect_identifier()?;
+            if key != "gap" {
+                return Err(self.error_here(format!("a group takes only `gap`, found `{key}`")));
+            }
+            self.expect(&Token::Colon)?;
+            gap = self.parse_gap()?;
+            self.expect(&Token::RightParen)?;
+        }
+        Ok(LayoutSubject::Group { members, kind, gap })
+    }
+
+    /// `[a, b, …]`, at least one name.
+    fn parse_node_list(&mut self) -> Result<Vec<LayoutNodeRef>, ParseError> {
+        self.expect(&Token::LeftBracket)?;
+        let mut out = vec![self.parse_layout_node()?];
+        while self.peek() == &Token::Comma {
+            self.bump();
+            out.push(self.parse_layout_node()?);
+        }
+        self.expect(&Token::RightBracket)?;
+        Ok(out)
+    }
+
+    fn parse_layout_node(&mut self) -> Result<LayoutNodeRef, ParseError> {
+        let (scope_path, name) = self.expect_path()?;
+        Ok(LayoutNodeRef { scope_path, name })
+    }
+
+    /// `a`, `a and b and …`, or the unquoted `all`.
+    fn parse_layout_targets(&mut self) -> Result<LayoutTargets, ParseError> {
+        if self.at_word("all") {
+            self.bump();
+            return Ok(LayoutTargets::All);
+        }
+        let mut nodes = vec![self.parse_layout_node()?];
+        while self.at_word("and") {
+            self.bump();
+            nodes.push(self.parse_layout_node()?);
+        }
+        Ok(LayoutTargets::Nodes(nodes))
+    }
+
+    fn parse_layout_clause(&mut self) -> Result<LayoutClause, ParseError> {
+        const EXPECTED: &str = "Expected `at`, `by` or a layout clause (`right_of`, `left_of`, `above`, `below`, `<edge>_even_with`, `straight_from`, `straight_to`)";
+        let word = match self.peek().clone() {
+            Token::Identifier(word) if !self.is_quoted(self.pos) => word,
+            other => return Err(self.error_here(format!("{EXPECTED}, found {other:?}"))),
+        };
+        let direction = match word.as_str() {
+            "right_of" => Some(LayoutDirection::RightOf),
+            "left_of" => Some(LayoutDirection::LeftOf),
+            "above" => Some(LayoutDirection::Above),
+            "below" => Some(LayoutDirection::Below),
+            _ => None,
+        };
+        if let Some(direction) = direction {
+            self.bump();
+            let targets = self.parse_layout_targets()?;
+            let (mut gap, mut dx, mut dy) = (None, 0.0, 0.0);
+            if self.peek() == &Token::LeftParen {
+                self.bump();
+                loop {
+                    let key = self.expect_identifier()?;
+                    self.expect(&Token::Colon)?;
+                    match key.as_str() {
+                        "gap" => gap = Some(self.parse_gap()?),
+                        "dx" => dx = self.parse_layout_number()?,
+                        "dy" => dy = self.parse_layout_number()?,
+                        other => {
+                            return Err(self.error_here(format!(
+                                "unknown clause option `{other}`: expected `gap`, `dx` or `dy`"
+                            )));
+                        }
+                    }
+                    if self.peek() == &Token::Comma {
+                        self.bump();
+                        continue;
+                    }
+                    self.expect(&Token::RightParen)?;
+                    break;
+                }
+            }
+            return Ok(LayoutClause::Direction {
+                direction,
+                targets,
+                gap,
+                dx,
+                dy,
+            });
+        }
+        let edge = match word.as_str() {
+            "top_even_with" => Some(LayoutEdge::Top),
+            "bottom_even_with" => Some(LayoutEdge::Bottom),
+            "left_even_with" => Some(LayoutEdge::Left),
+            "right_even_with" => Some(LayoutEdge::Right),
+            _ => None,
+        };
+        if let Some(edge) = edge {
+            self.bump();
+            let targets = self.parse_layout_targets()?;
+            return Ok(LayoutClause::EvenWith { edge, targets });
+        }
+        match word.as_str() {
+            "straight_from" => {
+                self.bump();
+                Ok(LayoutClause::StraightFrom(self.parse_layout_node()?))
+            }
+            "straight_to" => {
+                self.bump();
+                Ok(LayoutClause::StraightTo(self.parse_layout_node()?))
+            }
+            other => Err(self.error_here(format!("{EXPECTED}, found `{other}`"))),
+        }
+    }
+
+    /// `tight` / `normal` / `wide`, or a non-negative number of pixels.
+    fn parse_gap(&mut self) -> Result<Gap, ParseError> {
+        if let Token::Identifier(word) = self.peek().clone() {
+            let gap = match word.as_str() {
+                "tight" => Gap::Tight,
+                "normal" => Gap::Normal,
+                "wide" => Gap::Wide,
+                other => {
+                    return Err(self.error_here(format!(
+                        "Expected `tight`, `normal`, `wide` or a number of pixels, found `{other}`"
+                    )));
+                }
+            };
+            self.bump();
+            return Ok(gap);
+        }
+        let px = self.parse_layout_number()?;
+        if px < 0.0 {
+            return Err(self.error_here("a gap cannot be negative"));
+        }
+        Ok(Gap::Px(px))
+    }
+
+    fn parse_layout_number(&mut self) -> Result<f64, ParseError> {
+        let value = match self.peek() {
+            Token::Int(i) => *i as f64,
+            Token::Float(f) => *f,
+            other => {
+                return Err(self.error_here(format!("Expected a number, found {other:?}")));
+            }
+        };
+        self.bump();
+        Ok(value)
+    }
+
+    /// `(x, y)`.
+    fn parse_layout_point(&mut self) -> Result<DVec2, ParseError> {
+        self.expect(&Token::LeftParen)?;
+        let x = self.parse_layout_number()?;
+        self.expect(&Token::Comma)?;
+        let y = self.parse_layout_number()?;
+        self.expect(&Token::RightParen)?;
+        Ok(DVec2::new(x, y))
     }
 }

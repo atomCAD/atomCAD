@@ -164,6 +164,15 @@ impl NodeData for ExportBuildScriptData {
         }
     }
 
+    fn get_parameter_metadata(&self) -> HashMap<String, (bool, Option<String>)> {
+        let mut m = HashMap::new();
+        m.insert(
+            "metadata".to_string(),
+            (false, Some("none (no sidecar is written)".to_string())),
+        );
+        m
+    }
+
     fn get_text_properties(&self) -> Vec<(String, TextValue)> {
         vec![(
             "file_name".to_string(),

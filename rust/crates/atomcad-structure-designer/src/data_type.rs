@@ -523,7 +523,10 @@ impl DataType {
     ///
     /// The rest of the rule inventory:
     /// - Numeric/vector widenings: `Int ↔ Float`, `IVec2 ↔ Vec2`,
-    ///   `IVec3 ↔ Vec3`, `IMat3 ↔ Mat3` (the float→int direction truncates).
+    ///   `IVec3 ↔ Vec3`, `IMat3 ↔ Mat3`. The float→int direction rounds to
+    ///   nearest for scalars and vectors and truncates for `Mat3 → IMat3`
+    ///   (`NetworkResult::convert_to`). Text-format *literals* take a different
+    ///   path (`TextValue::to_network_result`), which truncates throughout.
     ///   `IVec3` does **not** auto-promote to a diagonal `IMat3` — wire through
     ///   an `imat3_diag` node instead (`doc/design_matrix_types.md` D4).
     /// - Single value → `Array` (broadcasting); `LatticeVecs → DrawingPlane`

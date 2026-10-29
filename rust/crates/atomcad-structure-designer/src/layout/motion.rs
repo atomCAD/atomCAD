@@ -320,6 +320,26 @@ pub fn shift_half_plane(
     dx: f64,
     fixed: &HashSet<u64>,
 ) -> ShiftOutcome {
+    shift_half_plane_holding(network, sizes, threshold, dx, fixed, &HashSet::new())
+}
+
+/// [`shift_half_plane`], with `hold` kept out of the vertical clean-up only.
+///
+/// `hold` is the incremental pass's **pinned** set
+/// (`doc/design_deliberate_node_placement.md` D6). Pinned nodes are *not*
+/// added to `fixed` — that set must stay exactly an upstream closure, or the
+/// shift stops being wire-safe — so they translate with their side of the line
+/// like everything else. What `hold` changes is the cascade that clears a
+/// moved node off a `fixed` one: it never pushes a held node vertically,
+/// which is what keeps a placed node's vertical relations exact.
+pub fn shift_half_plane_holding(
+    network: &mut NodeNetwork,
+    sizes: &HashMap<u64, DVec2>,
+    threshold: f64,
+    dx: f64,
+    fixed: &HashSet<u64>,
+    hold: &HashSet<u64>,
+) -> ShiftOutcome {
     let mut outcome = ShiftOutcome::default();
     if !dx.is_finite() || dx <= 0.0 {
         return outcome;
@@ -368,9 +388,10 @@ pub fn shift_half_plane(
 
     // Clear whatever the translation landed on a fixed node.
     for (id, rect, ignore) in landing_sites {
-        let mut hold = fixed.clone();
-        hold.insert(id);
-        let pushed = cascade(network, sizes, rect, CascadeDir::Split, &hold, &ignore);
+        let mut held = fixed.clone();
+        held.extend(hold.iter().copied());
+        held.insert(id);
+        let pushed = cascade(network, sizes, rect, CascadeDir::Split, &held, &ignore);
         outcome.pushed.extend(pushed);
     }
     outcome.pushed.sort_unstable();
@@ -441,7 +462,7 @@ fn newly_overlaps_y(before: &Rect, after: &Rect, other: &Rect, gap: f64) -> bool
 }
 
 /// The two-axis form of [`newly_overlaps_y`], for the `fixed`-clearing pass.
-fn newly_collides(before: &Rect, after: &Rect, other: &Rect, gap: f64) -> bool {
+pub(crate) fn newly_collides(before: &Rect, after: &Rect, other: &Rect, gap: f64) -> bool {
     (after.overlaps(other, gap) && !before.overlaps(other, gap))
         || (after.overlaps(other, 0.0) && !before.overlaps(other, 0.0))
 }
