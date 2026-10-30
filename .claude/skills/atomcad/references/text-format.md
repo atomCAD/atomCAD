@@ -440,7 +440,16 @@ When editing (not replacing), if a node ID already exists:
 ## Error Handling
 
 The edit result separates `errors` (which make `success` false) from `warnings`
-(the rest of the edit still applies). Common problems and how they are reported:
+(the rest of the edit still applies).
+
+An edit is **all or nothing**. An *error* from the editor rejects the whole
+script: the network is left exactly as it was, nothing is created, and the last
+error is `Nothing was applied: an edit with an error leaves the network
+unchanged`. Fix the script and send all of it again. A *validation* error is
+different: the edit applied, and the network it produced is invalid; it stays
+(and is one undo step).
+
+Common problems and how they are reported:
 
 | Problem | Reported as | Cause |
 |---------|-------------|-------|

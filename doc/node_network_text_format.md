@@ -891,6 +891,13 @@ The edit command supports two modes:
 | **Incremental** (default) | (none) | Merge changes into existing network |
 | **Replace** | `--replace` | Replace entire network with specified content |
 
+In both modes an edit is **all or nothing**: if any statement fails (an unknown
+node type, a literal of the wrong type, a `delete` or `output` of a missing node,
+a path into a missing body), the network is left exactly as it was and the last
+error reads *Nothing was applied*. Warnings (an unknown property, a reference to
+a missing source node) do not stop the edit. Validation errors are reported
+after the edit has applied, and do not undo it.
+
 ### Incremental Mode (Default)
 
 When processing an edit command in incremental mode:

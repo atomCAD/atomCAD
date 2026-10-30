@@ -64,6 +64,14 @@ and validates** — the network was re-validated after the edit and its verdict 
 part of the answer, not just a side effect. Blocking problems are listed in
 `errors` and fail the edit; advisory ones are listed in `warnings` and do not.
 
+An edit is **all or nothing**. If a statement cannot be carried out (an unknown
+node type, a property literal of the wrong type, a `delete` or `output` naming a
+node that does not exist, a path into a body that does not exist), the network
+is left exactly as it was, and the last error says *Nothing was applied*. Fix the
+script and send all of it again. A validation error is different: the edit
+applied and the network it produced is invalid (a type mismatch on a wire, a
+wire cycle); that edit stays, and Ctrl+Z takes it back.
+
 Node names in `nodes_created`, `nodes_updated`, `nodes_deleted` and in error text
 are **full paths** (`m1/a`), since a body node's name is unique only within its
 own body.
@@ -199,7 +207,8 @@ from your own edits in the Text tab. Ctrl+Z in atomCAD reverts the whole edit,
 zone bodies included; Ctrl+Y (redo) reapplies it.
 
 An edit that applied but then failed validation is still undoable — that is the
-case the step exists for.
+case the step exists for. An edit with an error changed nothing, so it has no
+undo step.
 
 ### Tabs: `documents` and `--document`
 

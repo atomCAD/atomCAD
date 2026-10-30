@@ -306,6 +306,12 @@ the resulting network validates. Blocking validation errors land in `errors`
 `nodes_created` / `nodes_updated` / `nodes_deleted` and in error text are **full
 paths** (`m1/a`), because `m1/a` and `m2/a` are different nodes.
 
+An edit is **all or nothing**: if a statement fails (unknown node type, wrong
+literal type, `delete` / `output` of a missing node), the network is left
+exactly as it was and the last error says `Nothing was applied`. Resend the
+whole corrected script. A validation error, by contrast, comes from an edit
+that did apply; that edit stays.
+
 Two things a body edit commonly trips on, both reported this way:
 
 - A body with **no wire into its zone-output pin** is a blocking error — a

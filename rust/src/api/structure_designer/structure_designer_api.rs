@@ -10131,14 +10131,12 @@ pub fn serialize_active_network_to_text() -> String {
 }
 
 /// Apply text format edits to the active node network (replace mode with position preservation).
+/// An edit with an error leaves the network unchanged.
 #[flutter_rust_bridge::frb(sync)]
 pub fn apply_text_to_active_network(code: String) -> APITextEditResult {
-    use atomcad_structure_designer::network_validator::validate_network;
-    use atomcad_structure_designer::text_format::{Parser, edit_network as text_edit_network};
-    use glam::DVec2;
-    use std::collections::HashMap;
+    use atomcad_structure_designer::text_tab_edit::TextTabEditOutcome;
 
-    let error_result = |msg: String| -> APITextEditResult {
+    let error_result = |message: String, line: i32, column: i32| -> APITextEditResult {
         APITextEditResult {
             success: false,
             nodes_created: vec![],
@@ -10146,9 +10144,9 @@ pub fn apply_text_to_active_network(code: String) -> APITextEditResult {
             nodes_deleted: vec![],
             connections_made: vec![],
             errors: vec![APITextError {
-                message: msg,
-                line: 0,
-                column: 0,
+                message,
+                line,
+                column,
             }],
             warnings: vec![],
         }
@@ -10157,194 +10155,40 @@ pub fn apply_text_to_active_network(code: String) -> APITextEditResult {
     unsafe {
         with_mut_cad_instance_or(
             |cad_instance| {
-                let structure_designer = &mut cad_instance.structure_designer;
-
-                let network_name = match &structure_designer.active_node_network_name {
-                    Some(name) => name.clone(),
-                    None => return error_result("No active node network".to_string()),
-                };
-                // Linked content is read-only (`doc/design_library_linking.md` §6).
-                if let Err(e) = structure_designer.ensure_editable(&network_name) {
-                    return error_result(e);
-                }
-
-                // Temporarily remove network from registry (same borrow pattern as ai_edit_network)
-                let mut network = match structure_designer
-                    .node_type_registry
-                    .node_networks
-                    .remove(&network_name)
+                match cad_instance
+                    .structure_designer
+                    .apply_text_to_active_network(&code)
                 {
-                    Some(network) => network,
-                    None => return error_result(format!("Network '{}' not found", network_name)),
-                };
-
-                // Save node positions by custom_name before replacement
-                let saved_positions: HashMap<String, DVec2> = network
-                    .nodes
-                    .values()
-                    .filter_map(|node| {
-                        node.custom_name
-                            .as_ref()
-                            .map(|name| (name.clone(), node.position))
-                    })
-                    .collect();
-
-                // Save active node's custom_name so we can restore selection after replace
-                let active_custom_name: Option<String> = network
-                    .active_node_id
-                    .and_then(|id| network.nodes.get(&id))
-                    .and_then(|node| node.custom_name.clone());
-
-                // Validate parse first to extract line/column errors
-                let parse_errors: Vec<APITextError> = match Parser::parse(&code) {
-                    Ok(_) => vec![],
-                    Err(e) => vec![APITextError {
-                        message: e.message.clone(),
-                        line: e.line as i32,
-                        column: e.column as i32,
-                    }],
-                };
-
-                if !parse_errors.is_empty() {
-                    // Put network back and return parse errors
-                    structure_designer
-                        .node_type_registry
-                        .node_networks
-                        .insert(network_name, network);
-                    return APITextEditResult {
-                        success: false,
-                        nodes_created: vec![],
-                        nodes_updated: vec![],
-                        nodes_deleted: vec![],
-                        connections_made: vec![],
-                        errors: parse_errors,
-                        warnings: vec![],
-                    };
-                }
-
-                // Snapshot network BEFORE text edit (for undo)
-                use atomcad_structure_designer::serialization::node_networks_serialization::node_network_to_serializable;
-                let before_snapshot = node_network_to_serializable(
-                    &mut network,
-                    &structure_designer.node_type_registry.built_in_node_types,
-                    None,
-                    false,
-                )
-                .ok();
-                // A text edit can delete or reorder `parameter`s; the undo
-                // step restores the callers' wires into them from this.
-                let call_sites = atomcad_structure_designer::network_validator::capture_call_sites(
-                    &structure_designer.node_type_registry,
-                    &network_name,
-                );
-
-                // Apply edits in replace mode
-                let result = text_edit_network(
-                    &mut network,
-                    &structure_designer.node_type_registry,
-                    &code,
-                    true,
-                );
-
-                // Restore saved positions for nodes that were re-created
-                for node in network.nodes.values_mut() {
-                    if let Some(ref name) = node.custom_name {
-                        if let Some(&saved_pos) = saved_positions.get(name) {
-                            node.position = saved_pos;
+                    TextTabEditOutcome::Rejected(message) => error_result(message, 0, 0),
+                    TextTabEditOutcome::ParseError(e) => {
+                        error_result(e.message, e.line as i32, e.column as i32)
+                    }
+                    TextTabEditOutcome::Edited(result) => {
+                        if result.success {
+                            refresh_structure_designer_auto(cad_instance);
+                        }
+                        APITextEditResult {
+                            success: result.success,
+                            nodes_created: result.nodes_created,
+                            nodes_updated: result.nodes_updated,
+                            nodes_deleted: result.nodes_deleted,
+                            connections_made: result.connections_made,
+                            // Errors carry no line information past parsing.
+                            errors: result
+                                .errors
+                                .into_iter()
+                                .map(|message| APITextError {
+                                    message,
+                                    line: 0,
+                                    column: 0,
+                                })
+                                .collect(),
+                            warnings: result.warnings,
                         }
                     }
                 }
-
-                // Restore active/selected node by custom_name
-                if let Some(ref active_name) = active_custom_name {
-                    let node_id = network
-                        .nodes
-                        .values()
-                        .find(|n| n.custom_name.as_deref() == Some(active_name.as_str()))
-                        .map(|n| n.id);
-                    if let Some(id) = node_id {
-                        network.select_node(id);
-                    }
-                }
-
-                // Snapshot network AFTER text edit (for undo), before putting it back
-                let after_snapshot = node_network_to_serializable(
-                    &mut network,
-                    &structure_designer.node_type_registry.built_in_node_types,
-                    None,
-                    false,
-                )
-                .ok();
-
-                // Put network back
-                structure_designer
-                    .node_type_registry
-                    .node_networks
-                    .insert(network_name.clone(), network);
-
-                // Validate network
-                {
-                    let registry_ptr = &mut structure_designer.node_type_registry
-                        as *mut atomcad_structure_designer::node_type_registry::NodeTypeRegistry;
-                    if let Some(network) = (*registry_ptr).node_networks.get_mut(&network_name) {
-                        validate_network(network, &mut *registry_ptr, None);
-                    }
-                }
-
-                // Push undo command if the text edit made changes
-                let made_changes = result.success
-                    && (!result.nodes_created.is_empty()
-                        || !result.nodes_updated.is_empty()
-                        || !result.nodes_deleted.is_empty()
-                        || !result.connections_made.is_empty()
-                        || result.description_set.is_some()
-                        || result.summary_set.is_some()
-                        || result.output_set.is_some());
-                if made_changes {
-                    if let (Some(before), Some(after)) = (before_snapshot, after_snapshot) {
-                        use atomcad_structure_designer::undo::commands::text_edit_network::TextEditNetworkCommand;
-                        cad_instance
-                            .structure_designer
-                            .push_command(TextEditNetworkCommand {
-                                network_name: network_name.clone(),
-                                before_snapshot: before,
-                                after_snapshot: after,
-                                description: "Text edit network",
-                                call_sites,
-                            });
-                    }
-                }
-
-                // Mark full refresh and dirty
-                cad_instance.structure_designer.mark_full_refresh();
-                if made_changes {
-                    cad_instance.structure_designer.set_dirty(true);
-                }
-
-                refresh_structure_designer_auto(cad_instance);
-
-                // Convert EditResult errors (strings) to APITextError (without line info)
-                let errors: Vec<APITextError> = result
-                    .errors
-                    .iter()
-                    .map(|e| APITextError {
-                        message: e.clone(),
-                        line: 0,
-                        column: 0,
-                    })
-                    .collect();
-
-                APITextEditResult {
-                    success: result.success,
-                    nodes_created: result.nodes_created,
-                    nodes_updated: result.nodes_updated,
-                    nodes_deleted: result.nodes_deleted,
-                    connections_made: result.connections_made,
-                    errors,
-                    warnings: result.warnings,
-                }
             },
-            error_result("Could not access structure designer".to_string()),
+            error_result("Could not access structure designer".to_string(), 0, 0),
         )
     }
 }

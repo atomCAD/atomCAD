@@ -418,6 +418,9 @@ mod ai_edit_history_test;
 #[path = "structure_designer/ai_edit_log_test.rs"]
 mod ai_edit_log_test;
 
+#[path = "structure_designer/edit_rollback_test.rs"]
+mod edit_rollback_test;
+
 #[path = "structure_designer/alignment_test.rs"]
 mod alignment_test;
 

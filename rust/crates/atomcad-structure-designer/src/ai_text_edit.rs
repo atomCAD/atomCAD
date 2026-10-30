@@ -248,6 +248,13 @@ impl StructureDesigner {
             return self.reject_ai_edit(network_name, code, replace, dry_run, vec![message]);
         }
 
+        // An edit is all or nothing: the editor carries on past a failed
+        // statement, so on an error the untouched copy goes back instead. A
+        // clone, not the snapshot above, because it keeps runtime-only node
+        // state (`ai_placed`) that the `.cnnd` form drops; bodies are behind
+        // an `Arc`, so it is cheap.
+        let original = network.clone();
+
         // Apply the edit commands. The layout statements come back beside the
         // result: the editor does not act on them, the layout pass below does
         // (`doc/design_deliberate_node_placement.md` A2).
@@ -259,6 +266,21 @@ impl StructureDesigner {
         // about to mean something stricter (D15), and an edit that landed still
         // needs its layout and its dirty flag.
         let edit_applied = result.success;
+
+        if !edit_applied {
+            self.node_type_registry
+                .node_networks
+                .insert(network_name.clone(), original);
+            return self.reject_applied_edit(
+                network_name,
+                code,
+                replace,
+                dry_run,
+                result,
+                before_text,
+                &before_positions,
+            );
+        }
 
         // Put the network back into the registry
         self.node_type_registry
@@ -353,8 +375,8 @@ impl StructureDesigner {
 
         // --- The log's "after" pair, and the layout outcome (D9) ---------
         //
-        // Taken past validation and past layout, so a partially-applied edit
-        // shows its real partial effect rather than nothing.
+        // Taken past validation and past layout, so an edit that applied but
+        // left the network invalid shows its real effect.
         //
         // `LayoutPath::Incremental` now covers **every** scope: the pass walks
         // bodies as first-class scopes, so unlike the old `FullReflow` reading
@@ -593,6 +615,61 @@ impl StructureDesigner {
         }
         AiTextEditOutcome::rejected(errors, dry_run)
     }
+
+    /// Log and report an edit the editor ran but found an error in, after the
+    /// network has been put back as it was. Nothing of it stayed, so the
+    /// result lists nothing created or changed; its errors and warnings are
+    /// kept, with a closing line saying so. The log entry carries the network's
+    /// text as both snapshots, so it says "unchanged" rather than "no state".
+    #[allow(clippy::too_many_arguments)]
+    fn reject_applied_edit(
+        &mut self,
+        network_name: String,
+        code: &str,
+        replace: bool,
+        dry_run: bool,
+        result: EditResult,
+        before_text: String,
+        before_positions: &PositionSnapshot,
+    ) -> AiTextEditOutcome {
+        let errors = rolled_back_errors(result.errors);
+        if !dry_run {
+            let layout = match self.node_type_registry.node_networks.get(&network_name) {
+                Some(network) => LayoutOutcome::compute(
+                    LayoutPath::None,
+                    network,
+                    before_positions,
+                    before_positions,
+                ),
+                None => LayoutOutcome::default(),
+            };
+            let mut record = AiEditRecord::applied_edit(
+                network_name,
+                code.to_string(),
+                replace,
+                false,
+                before_text.clone(),
+                before_text,
+                layout,
+            );
+            record.errors = errors.clone();
+            record.warnings = result.warnings.clone();
+            self.record_ai_edit(record);
+        }
+        let mut outcome = AiTextEditOutcome::rejected(errors, dry_run);
+        outcome.result.warnings = result.warnings;
+        outcome
+    }
+}
+
+/// The message closing the error list of an edit that was rolled back.
+pub const EDIT_NOT_APPLIED_MESSAGE: &str =
+    "Nothing was applied: an edit with an error leaves the network unchanged";
+
+/// `errors` plus [`EDIT_NOT_APPLIED_MESSAGE`].
+pub fn rolled_back_errors(mut errors: Vec<String>) -> Vec<String> {
+    errors.push(EDIT_NOT_APPLIED_MESSAGE.to_string());
+    errors
 }
 
 /// Set [`ai_placed`](crate::node_network::Node::ai_placed) on every node of

@@ -78,6 +78,7 @@ structure_designer/
 ├── network_thumbnail.rs       # NetworkThumbnail (opaque PNG) + the process-wide revision counter
 ├── thumbnail_ops.rs           # Thumbnails: which network a capture lands on, store, set/reset (D2/D6)
 ├── ai_text_edit.rs            # ai_text_edit: the AI edit choke point (edit → validate → layout → log → undo)
+├── text_tab_edit.rs           # The in-app Text tab's replace-mode apply (positions kept by name, one undo step)
 ├── mechanosynth_edit_ops.rs   # mechanosynth_edit: block edits, cursor, and the click→place flow
 ├── chemisorb_ops.rs           # chemisorb: Run as a node job (prepare / search / install), the debug view's select action, the settings setter
 ├── node_jobs/                 # Node jobs: explicit per-node work run off the UI thread (runner, DocumentSet side)
@@ -394,6 +395,12 @@ network"`) and **one entry in `StructureDesigner::ai_edit_log`**
   network not found. A rejected edit is the feedback the log most exists to
   surface. Their records carry empty snapshots, which is also what keeps them
   out of divergence detection at both ends.
+- **An edit is all or nothing.** The editor carries on past a failed statement
+  (and in replace mode has cleared the network before the first one), so on
+  any editor error `ai_text_edit` puts back a clone taken before the edit and
+  logs the attempt as rejected; the in-app Text tab
+  (`text_tab_edit.rs`) does the same. A clone, not a `.cnnd` restore, so
+  runtime-only node state survives. Validation errors do not roll back.
 - **Two verdicts, never one.** `applied` is the editor's own ("the statements
   parsed and landed"); `success` folds in a *whole-network* validation verdict,
   so an already-broken network makes every later edit report `success: false`

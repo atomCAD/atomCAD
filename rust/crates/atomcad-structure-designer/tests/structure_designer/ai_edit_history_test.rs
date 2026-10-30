@@ -230,12 +230,13 @@ fn a_syntactically_broken_script_records_its_errors_and_changes_nothing() {
     assert!(rec.before_text.contains("sphere1 = sphere"));
 }
 
-/// "…and whatever partial state resulted": an unknown node type fails the edit
-/// but the statements around it still land, and the snapshot pair is what shows
-/// that.
+/// An unknown node type rolls the whole edit back, the statements around it
+/// included (`edit_rollback_test.rs`); the entry still records the attempt,
+/// with the unchanged state as both snapshots.
 #[test]
-fn a_partially_applied_script_records_the_state_it_actually_left() {
+fn a_script_with_an_error_records_the_unchanged_state() {
     let mut sd = designer();
+    edit(&mut sd, SPHERE);
 
     let outcome = sd.ai_text_edit(
         "good = sphere { radius: 5 }\nbad = no_such_node_type { }\n",
@@ -246,12 +247,9 @@ fn a_partially_applied_script_records_the_state_it_actually_left() {
     let rec = sd.ai_edit_log.last().unwrap();
     assert!(!rec.applied);
     assert!(!rec.errors.is_empty());
-    assert!(
-        rec.after_text.contains("good = sphere"),
-        "the partial effect must be visible in the after-snapshot: {}",
-        rec.after_text
-    );
-    assert_ne!(rec.before_text, rec.after_text);
+    assert_eq!(rec.before_text, rec.after_text);
+    assert!(rec.before_text.contains("sphere1 = sphere"));
+    assert!(!rec.after_text.contains("good = sphere"));
 }
 
 // ============================================================================
