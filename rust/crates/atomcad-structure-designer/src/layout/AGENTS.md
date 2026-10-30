@@ -17,6 +17,7 @@ Automatic layout algorithms for repositioning nodes in a network.
 | `arrange.rs` | `arrange(scope, registry, sizes, ids, ArrangeOp)` — align / stack / distribute / straighten / subset layout over chosen nodes (see below) |
 | `topological_grid.rs` | Simple layered layout (fast, reliable) |
 | `sugiyama.rs` | Sugiyama-style layout with crossing minimization |
+| `wire_geometry.rs` | `WireCurve` — a wire as Flutter draws it, for the wire findings (see below) |
 
 ## Entry Points
 
@@ -260,6 +261,15 @@ result's `layout` section and copies into the AI edit log. Three rules:
   clearance, and new same-scope wires left backward. The oracle checks the
   overlap findings in both directions with its own overlap test, so do not
   make `check_overlap_findings` call `scope_findings`.
+- **Wire findings judge the curve Flutter draws** (`wire_geometry::WireCurve`:
+  `_getPath`'s cubic, control points `WIRE_CONTROL_OFFSET` out), never the
+  rectangle between the pins. "Before" is rebuilt from the snapshot's boxes
+  for every wire not in `added_wires`. A pair with nothing changed is never
+  tested and the rest are box-tested first; the demolib worst case (no
+  snapshot, every pair) is timed by `wire_findings_are_fast_on_demolib`.
+  Mirror-image wires meet exactly at a sample point, so the segment test
+  counts touching; wires sharing a pin, or joining the same two nodes (their
+  crossing is pin order, which no placement fixes), are skipped instead.
 
 ## Step 2½: layout statements and the pinned set
 

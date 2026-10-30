@@ -130,6 +130,8 @@ mod layout_ai_edit_test;
 
 #[path = "structure_designer/layout_report_test.rs"]
 mod layout_report_test;
+#[path = "structure_designer/layout_wire_geometry_test.rs"]
+mod layout_wire_geometry_test;
 
 #[path = "structure_designer/layout_readout_test.rs"]
 mod layout_readout_test;

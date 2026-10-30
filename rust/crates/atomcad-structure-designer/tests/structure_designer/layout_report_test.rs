@@ -433,3 +433,166 @@ fn a_rejected_dry_run_is_not_logged() {
     assert_eq!(json["dry_run"], true);
     assert!(json.get("layout").is_none());
 }
+
+// ============================================================================
+// Wire findings
+// ============================================================================
+
+/// `s -> t` runs level at the height of both pins, from `s`'s right edge to
+/// `t`'s left: an `int` output and an `expr`'s first input sit at the same
+/// offset, 44 px below the top.
+fn level_wire(sd: &mut StructureDesigner) {
+    edit(
+        sd,
+        &format!("s = int {{ value: 1 }}\nt = expr {{ x: s, {EXPR_X} }}\nc = int {{ value: 2 }}\n"),
+    );
+    place(sd, "s", 0.0, 0.0);
+    place(sd, "t", 700.0, 0.0);
+}
+
+fn findings_of(
+    sd: &StructureDesigner,
+    snapshot: &atomcad_structure_designer::text_format::PositionSnapshot,
+) -> Vec<atomcad_structure_designer::layout::Finding> {
+    let scope = network(sd, "main");
+    let sizes = measure_scope(scope, &sd.node_type_registry);
+    scope_findings(scope, &sizes, &[], snapshot, &[])
+}
+
+/// A node moved onto a wire's path is a finding, with the length hidden.
+#[test]
+fn a_node_moved_behind_a_wire_is_found() {
+    let mut sd = designer();
+    level_wire(&mut sd);
+    place(&mut sd, "c", 300.0, 400.0);
+    let snapshot = snapshot_node_positions(network(&sd, "main"), &sd.node_type_registry);
+
+    place(&mut sd, "c", 300.0, 20.0);
+    let findings = findings_of(&sd, &snapshot);
+
+    assert_eq!(findings.len(), 1, "{findings:?}");
+    assert_eq!(findings[0].kind, FindingKind::WireOverNode);
+    assert_eq!(findings[0].nodes, vec![p(&["s"]), p(&["t"]), p(&["c"])]);
+    let width = size(&sd, "c").x.round() as i64;
+    assert_eq!(
+        findings[0].message,
+        format!("wire s -> t runs behind c for {width} px")
+    );
+}
+
+/// A wire that already ran behind a node is the baseline, even when the edit
+/// moves the wire's ends; a wire that only grazes a corner is not reported.
+#[test]
+fn a_wire_already_behind_a_node_or_grazing_one_is_not_found() {
+    let mut sd = designer();
+    level_wire(&mut sd);
+    place(&mut sd, "c", 300.0, 20.0);
+    let snapshot = snapshot_node_positions(network(&sd, "main"), &sd.node_type_registry);
+
+    place(&mut sd, "t", 720.0, 0.0);
+    assert!(findings_of(&sd, &snapshot).is_empty());
+
+    // Clear of the wire, then with its right edge 4 px past the wire's start:
+    // 4 px hidden, under MIN_HIDDEN_LENGTH. (It overlaps `s`, which is a
+    // finding of another kind.)
+    place(&mut sd, "c", 300.0, 400.0);
+    let snapshot = snapshot_node_positions(network(&sd, "main"), &sd.node_type_registry);
+    let s_right = size(&sd, "s").x;
+    let c_width = size(&sd, "c").x;
+    place(&mut sd, "c", s_right - c_width + 4.0, 20.0);
+    let findings = findings_of(&sd, &snapshot);
+    assert!(
+        findings
+            .iter()
+            .all(|finding| finding.kind != FindingKind::WireOverNode),
+        "{findings:?}"
+    );
+}
+
+/// Swapping two destinations makes their wires cross: one finding. Crossed
+/// before and still crossed after: none.
+#[test]
+fn a_new_crossing_is_found_and_a_pre_existing_one_is_not() {
+    let mut sd = designer();
+    edit(
+        &mut sd,
+        &format!(
+            "a = int {{ value: 1 }}\nb = int {{ value: 2 }}\nx = expr {{ x: a, {EXPR_X} }}\ny = expr {{ x: b, {EXPR_X} }}\n"
+        ),
+    );
+    place(&mut sd, "a", 0.0, 0.0);
+    place(&mut sd, "b", 0.0, 200.0);
+    place(&mut sd, "x", 600.0, 0.0);
+    place(&mut sd, "y", 600.0, 200.0);
+    let snapshot = snapshot_node_positions(network(&sd, "main"), &sd.node_type_registry);
+    assert!(findings_of(&sd, &snapshot).is_empty());
+
+    place(&mut sd, "x", 600.0, 200.0);
+    place(&mut sd, "y", 600.0, 0.0);
+    let findings = findings_of(&sd, &snapshot);
+    assert_eq!(findings.len(), 1, "{findings:?}");
+    assert_eq!(findings[0].kind, FindingKind::Crossing);
+    assert_eq!(
+        findings[0].nodes,
+        vec![p(&["a"]), p(&["x"]), p(&["b"]), p(&["y"])]
+    );
+    assert_eq!(
+        findings[0].message,
+        "wire a -> x crosses wire b -> y".to_string()
+    );
+
+    let snapshot = snapshot_node_positions(network(&sd, "main"), &sd.node_type_registry);
+    place(&mut sd, "y", 620.0, 0.0);
+    assert!(findings_of(&sd, &snapshot).is_empty());
+}
+
+/// Two wires out of one pin meet at it; with no snapshot every wire is new,
+/// and still nothing is reported.
+#[test]
+fn wires_sharing_a_pin_do_not_cross() {
+    let mut sd = designer();
+    edit(
+        &mut sd,
+        &format!(
+            "a = int {{ value: 1 }}\nx = expr {{ x: a, {EXPR_X} }}\ny = expr {{ x: a, {EXPR_X} }}\n"
+        ),
+    );
+    place(&mut sd, "a", 0.0, 100.0);
+    place(&mut sd, "x", 600.0, 0.0);
+    place(&mut sd, "y", 600.0, 300.0);
+    assert!(findings_of(&sd, &Default::default()).is_empty());
+}
+
+/// The wire checks on every demolib network, every pair tested (no snapshot,
+/// so nothing counts as unchanged): the worst case an edit can hit.
+#[test]
+fn wire_findings_are_fast_on_demolib() {
+    let sd = super::layout_corpus_test::load(&super::layout_corpus_test::demolib_path());
+    let mut names: Vec<&String> = sd.node_type_registry.node_networks.keys().collect();
+    names.sort();
+    let empty = Default::default();
+
+    let start = std::time::Instant::now();
+    let mut slowest = (std::time::Duration::ZERO, String::new(), 0);
+    for name in names {
+        let scope = &sd.node_type_registry.node_networks[name];
+        let sizes = measure_scope(scope, &sd.node_type_registry);
+        let one = std::time::Instant::now();
+        scope_findings(scope, &sizes, &[], &empty, &[]);
+        let took = one.elapsed();
+        if took > slowest.0 {
+            slowest = (took, name.clone(), scope.nodes.len());
+        }
+    }
+    let total = start.elapsed();
+    println!(
+        "wire findings over demolib: {total:?} in all; slowest {} ({} nodes) {:?}",
+        slowest.1, slowest.2, slowest.0
+    );
+    assert!(
+        slowest.0 < std::time::Duration::from_millis(250),
+        "{} took {:?}",
+        slowest.1,
+        slowest.0
+    );
+}

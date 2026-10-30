@@ -23,10 +23,13 @@ use std::collections::{HashMap, HashSet};
 use glam::DVec2;
 use serde_json::{Value, json};
 
-use crate::layout::delta::WireKey;
+use crate::layout::arrange::{input_pin_offset, output_pin_offset};
+use crate::layout::common::is_comment;
+use crate::layout::delta::{WireEnd, WireKey, WireSlot};
 use crate::layout::motion::{GAP, Rect, upstream_closure};
+use crate::layout::wire_geometry::WireCurve;
 use crate::node_layout::nodes_overlap;
-use crate::node_network::NodeNetwork;
+use crate::node_network::{ArgumentKind, NodeNetwork, SourcePin};
 use crate::text_format::{NamePath, PositionSnapshot, PushDir, unique_node_names};
 
 /// Why an existing node moved.
@@ -155,6 +158,10 @@ pub enum FindingKind {
     Overlap,
     /// A wire this edit created runs backward and nothing repaired it.
     BackwardWire,
+    /// A wire runs behind a node after the edit and did not before.
+    WireOverNode,
+    /// Two wires cross after the edit and did not before.
+    Crossing,
 }
 
 impl FindingKind {
@@ -162,6 +169,8 @@ impl FindingKind {
         match self {
             FindingKind::Overlap => "overlap",
             FindingKind::BackwardWire => "backward_wire",
+            FindingKind::WireOverNode => "wire_over_node",
+            FindingKind::Crossing => "crossing",
         }
     }
 }
@@ -171,8 +180,9 @@ impl FindingKind {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Finding {
     pub kind: FindingKind,
-    /// The nodes involved: the overlapping pair, sorted, or a wire's source
-    /// and destination.
+    /// The nodes involved: the overlapping pair, sorted; a wire's source and
+    /// destination; those two and the node behind the wire; or both wires'
+    /// source and destination, the wires in order.
     pub nodes: Vec<NamePath>,
     /// One line, saying what, where and how much.
     pub message: String,
@@ -370,6 +380,14 @@ pub fn scope_findings(
         &path_of,
         &rect_of,
     ));
+    findings.extend(wire_findings(
+        scope,
+        sizes,
+        snapshot,
+        added_wires,
+        &path_of,
+        &rect_of,
+    ));
     findings
 }
 
@@ -517,4 +535,223 @@ fn backward_wires(
 
 fn overlaps(a: Rect, b: Rect) -> bool {
     nodes_overlap(a.pos, a.size, b.pos, b.size, 0.0)
+}
+
+/// The least a wire must run behind a node to be reported, in px. A wire that
+/// clips a corner for a few pixels still reads as passing by.
+pub const MIN_HIDDEN_LENGTH: f64 = 10.0;
+
+/// One same-scope wire, as drawn after the edit and, if it existed, before.
+struct DrawnWire {
+    source: (u64, i32),
+    destination: (u64, usize),
+    label: String,
+    paths: [NamePath; 2],
+    now: WireCurve,
+    was: Option<WireCurve>,
+    /// Whether its end points moved: new, or either end node moved or resized.
+    changed: bool,
+}
+
+/// One node a wire could run behind, after the edit and, if it existed, before.
+struct Obstacle {
+    id: u64,
+    path: NamePath,
+    now: Rect,
+    was: Option<Rect>,
+}
+
+/// Wires that newly run behind a node, and wire pairs that newly cross.
+///
+/// A wire is the curve Flutter draws ([`WireCurve`]). "Before" is rebuilt from
+/// the snapshot: a wire not in `added_wires` existed, with its ends at the
+/// snapshot's boxes. A pair where nothing changed cannot be new and is never
+/// tested, and every remaining pair is box-tested before its curves are.
+fn wire_findings(
+    scope: &NodeNetwork,
+    sizes: &HashMap<u64, DVec2>,
+    snapshot: &PositionSnapshot,
+    added_wires: &[WireKey],
+    path_of: &dyn Fn(u64) -> Option<NamePath>,
+    rect_of: &dyn Fn(u64) -> Option<Rect>,
+) -> Vec<Finding> {
+    let wires = drawn_wires(scope, snapshot, added_wires, path_of, rect_of);
+
+    let mut ids: Vec<u64> = scope.nodes.keys().copied().collect();
+    ids.sort_unstable();
+    let obstacles: Vec<Obstacle> = ids
+        .iter()
+        .filter(|id| sizes.contains_key(id) && !is_comment(&scope.nodes[id]))
+        .filter_map(|&id| {
+            let path = path_of(id)?;
+            Some(Obstacle {
+                id,
+                now: rect_of(id)?,
+                was: snapshot_rect(snapshot, &path),
+                path,
+            })
+        })
+        .collect();
+
+    let mut out = Vec::new();
+    for wire in &wires {
+        for node in &obstacles {
+            if node.id == wire.source.0 || node.id == wire.destination.0 {
+                continue;
+            }
+            if !wire.changed && node.was == Some(node.now) {
+                continue;
+            }
+            let hidden = wire.now.length_inside(node.now);
+            if hidden < MIN_HIDDEN_LENGTH {
+                continue;
+            }
+            let existed = match (&wire.was, node.was) {
+                (Some(curve), Some(rect)) => curve.length_inside(rect) >= MIN_HIDDEN_LENGTH,
+                _ => false,
+            };
+            if existed {
+                continue;
+            }
+            out.push(Finding {
+                kind: FindingKind::WireOverNode,
+                message: format!(
+                    "{} runs behind {} for {} px",
+                    wire.label,
+                    node.path.join("/"),
+                    px(hidden)
+                ),
+                nodes: vec![
+                    wire.paths[0].clone(),
+                    wire.paths[1].clone(),
+                    node.path.clone(),
+                ],
+            });
+        }
+    }
+
+    for (i, a) in wires.iter().enumerate() {
+        for b in &wires[i + 1..] {
+            if !a.changed && !b.changed {
+                continue;
+            }
+            // Wires sharing a pin meet there; that is not a crossing.
+            if a.source == b.source || a.destination == b.destination {
+                continue;
+            }
+            // Two wires between the same two nodes cross by their pin order,
+            // which no placement changes.
+            let ends = |w: &DrawnWire| {
+                let (s, d) = (w.source.0, w.destination.0);
+                (s.min(d), s.max(d))
+            };
+            if ends(a) == ends(b) {
+                continue;
+            }
+            if !a.now.crosses(&b.now) {
+                continue;
+            }
+            if let (Some(a_was), Some(b_was)) = (&a.was, &b.was)
+                && a_was.crosses(b_was)
+            {
+                continue;
+            }
+            let (first, second) = if a.paths <= b.paths { (a, b) } else { (b, a) };
+            out.push(Finding {
+                kind: FindingKind::Crossing,
+                message: format!("{} crosses {}", first.label, second.label),
+                nodes: first.paths.iter().chain(&second.paths).cloned().collect(),
+            });
+        }
+    }
+    out
+}
+
+fn snapshot_rect(snapshot: &PositionSnapshot, path: &NamePath) -> Option<Rect> {
+    snapshot
+        .get(path)
+        .map(|state| Rect::new(state.position, state.footprint))
+}
+
+/// Every same-scope wire from a node output into an ordinary input, in
+/// destination id order.
+fn drawn_wires(
+    scope: &NodeNetwork,
+    snapshot: &PositionSnapshot,
+    added_wires: &[WireKey],
+    path_of: &dyn Fn(u64) -> Option<NamePath>,
+    rect_of: &dyn Fn(u64) -> Option<Rect>,
+) -> Vec<DrawnWire> {
+    let added: HashSet<&WireKey> = added_wires.iter().collect();
+    let mut ids: Vec<u64> = scope.nodes.keys().copied().collect();
+    ids.sort_unstable();
+
+    let mut wires = Vec::new();
+    for destination in ids {
+        let (Some(destination_rect), Some(destination_path)) =
+            (rect_of(destination), path_of(destination))
+        else {
+            continue;
+        };
+        for (arg_index, arg) in scope.nodes[&destination].arguments.iter().enumerate() {
+            for wire in &arg.incoming_wires {
+                let SourcePin::NodeOutput { pin_index } = wire.source_pin else {
+                    continue;
+                };
+                let source = wire.source_node_id;
+                if wire.source_scope_depth != 0 || source == destination {
+                    continue;
+                }
+                let (Some(source_rect), Some(source_path)) = (rect_of(source), path_of(source))
+                else {
+                    continue;
+                };
+                let out_offset = output_pin_offset(scope, source, pin_index);
+                let in_offset = input_pin_offset(arg_index);
+                let ends = |source: Rect, destination: Rect| {
+                    (
+                        DVec2::new(source.right(), source.top() + out_offset),
+                        DVec2::new(destination.left(), destination.top() + in_offset),
+                    )
+                };
+                let key = WireKey {
+                    source: WireEnd::NodeOutput {
+                        path: source_path.clone(),
+                        pin_index,
+                    },
+                    destination: destination_path.clone(),
+                    slot: WireSlot {
+                        kind: ArgumentKind::External,
+                        index: arg_index,
+                    },
+                };
+                let was_ends = if added.contains(&key) {
+                    None
+                } else {
+                    match (
+                        snapshot_rect(snapshot, &source_path),
+                        snapshot_rect(snapshot, &destination_path),
+                    ) {
+                        (Some(s), Some(d)) => Some(ends(s, d)),
+                        _ => None,
+                    }
+                };
+                let now_ends = ends(source_rect, destination_rect);
+                wires.push(DrawnWire {
+                    source: (source, pin_index),
+                    destination: (destination, arg_index),
+                    label: format!(
+                        "wire {} -> {}",
+                        source_path.join("/"),
+                        destination_path.join("/")
+                    ),
+                    paths: [source_path, destination_path.clone()],
+                    now: WireCurve::new(now_ends.0, now_ends.1),
+                    was: was_ends.map(|(from, to)| WireCurve::new(from, to)),
+                    changed: was_ends != Some(now_ends),
+                });
+            }
+        }
+    }
+    wires
 }

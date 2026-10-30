@@ -365,9 +365,13 @@ existed, left a problem behind, or had layout statements, the result has a
   cause, `why` is `line N: <statement>`.
 - `findings` — what this edit **created** and nothing repaired, each
   `{ "kind", "message", "nodes" }` with `kind`
-  `overlap` (two nodes overlap that did not before) or `backward_wire` (a new
-  wire runs right to left, e.g. because it closes a cycle). Pre-existing
-  overlaps and backward wires are the user's baseline and never reported.
+  `overlap` (two nodes overlap that did not before), `backward_wire` (a new
+  wire runs right to left, e.g. because it closes a cycle), `wire_over_node`
+  (a wire now runs behind a node it does not connect to; `nodes` = the wire's
+  source, its destination, the node) or `crossing` (two wires now cross;
+  `nodes` = both wires' source and destination). Wires are judged as drawn:
+  one curve between the two pins. Pre-existing overlaps, backward wires,
+  hidden wires and crossings are the user's baseline and never reported.
 - `warnings` — layout statements that could not be carried out:
   `{ "line", "statement", "problem", "fallback" }`. The edit itself still
   applied; the `fallback` says what happened to the subject instead.

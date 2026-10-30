@@ -126,13 +126,16 @@ everywhere else in the result. Values are rounded to whole pixels.
 | `grow` | a node this edit made bigger (a new pin, a fuller body) pushed it |
 | `auto` | room had to be made for a new node, a new wire had to be kept running left to right, or a comment followed its anchor back |
 
-**Findings** are only ever about what *this* edit created. Overlaps and
-backward wires your drawing already had are left alone and never reported.
+**Findings** are only ever about what *this* edit created. Overlaps, backward
+wires, hidden wires and crossings your drawing already had are left alone and
+never reported.
 
 | `kind` | Reported when |
 |---|---|
 | `overlap` | two nodes overlap after the edit and did not before (only possible where a layout statement put a node, since everything else is pushed clear) |
 | `backward_wire` | a wire this edit created runs right to left and could not be repaired (typically because it closes a cycle, so no shift can put both ends in order) |
+| `wire_over_node` | a wire runs behind a node it does not connect to, for at least 10 px, and did not before. `nodes` lists the wire's source, its destination and the node; the message gives the hidden length |
+| `crossing` | two wires cross and did not before. `nodes` lists the first wire's source and destination, then the second's. Wires that share a pin, or join the same two nodes, are never reported |
 
 The whole `layout` key is **absent** when there is nothing to say: no existing
 node moved, nothing was found, and the edit had no layout statements. That is

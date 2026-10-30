@@ -51,6 +51,7 @@ pub mod report;
 pub mod size;
 pub mod sugiyama;
 pub mod topological_grid;
+pub mod wire_geometry;
 
 // Re-export main types and functions
 pub use arrange::{ArrangeOp, arrange};
