@@ -68,7 +68,10 @@ pub use motion::{
     CascadeDir, Rect, ShiftOutcome, cascade, grow_rect, measure_scope, shift_half_plane,
     shift_half_plane_holding, snap_shift_line, upstream_closure,
 };
-pub use readout::{ReadoutFilter, layout_readout, parse_readout_args};
+pub use readout::{
+    IMAGE_FRAME_MARGIN, ImageFrame, ReadoutFilter, layout_image_frame, layout_readout,
+    parse_readout_args,
+};
 pub use report::{
     Causes, Finding, FindingKind, LayoutMove, LayoutReport, LayoutWarning, MoveCause, PlacedBox,
     scope_findings,

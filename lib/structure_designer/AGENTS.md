@@ -111,7 +111,10 @@ per-document model.
   one synchronous stretch after reading the body; only `/load` and `/new`
   await, because they are switches (`onOpenDocument` / `onNewDocument`, wired
   to the model in `main.dart`). A new handler must not `await` after its first
-  API call. The CLI's `--document` guard (`X-Atomcad-Document` header →
+  API call. Work that must still finish before the response closes but
+  touches no document (the PNG encode and file write of `/layout?image=`)
+  goes in `_pendingResponse`, which the dispatcher awaits only after the
+  activity record. The CLI's `--document` guard (`X-Atomcad-Document` header →
   `check_document_guard`) is checked once, in `_handleRequest`, as the first
   step of that stretch — a new handler gets it for free; a new path that does
   not act on the active document belongs in `_unguardedPaths`.

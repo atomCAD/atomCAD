@@ -107,7 +107,15 @@ Future<void> main(List<String> args) async {
         help: 'With --layout: list nodes intersecting x0,y0,x1,y1 '
             '(write --box=x0,... when x0 is negative)')
     ..addOption('scope',
-        help: 'With --layout: a HOF body, as a path of names (m1/m2)');
+        help: 'With --layout: a HOF body, as a path of names (m1/m2)')
+    ..addOption('image',
+        help: 'With --layout: also write the same area of the canvas to this '
+            'PNG')
+    ..addOption('scale',
+        help: 'With --image: image pixels per canvas pixel (default 1)')
+    ..addFlag('rulers',
+        defaultsTo: true,
+        help: 'With --image: labelled rulers on the top and left edges');
 
   final editParser = ArgParser()
     ..addOption('code', abbr: 'c', help: 'Edit commands (optional)')
@@ -288,17 +296,29 @@ Future<void> main(List<String> args) async {
       final nodes = command['nodes'] as String?;
       final box = command['box'] as String?;
       final scope = command['scope'] as String?;
-      // A filter only means something to the layout read-out, so it implies
-      // --layout rather than being silently ignored.
+      final image = command['image'] as String?;
+      final scale = command['scale'] as String?;
+      final rulers = command['rulers'] as bool;
+      final problem = _layoutArgsProblem(
+          nodes: nodes, box: box, image: image, scale: scale, rulers: rulers);
+      if (problem != null) {
+        stderr.writeln('Error: $problem');
+        exit(1);
+      }
+      // A filter or an image only means something to the layout read-out, so
+      // it implies --layout rather than being silently ignored.
       if ((command['layout'] as bool) ||
           nodes != null ||
           box != null ||
-          scope != null) {
-        if (nodes != null && box != null) {
-          stderr.writeln('Error: --nodes and --box are mutually exclusive');
-          exit(1);
-        }
-        await _runQueryLayout(serverUrl, nodes: nodes, box: box, scope: scope);
+          scope != null ||
+          image != null) {
+        await _runQueryLayout(serverUrl,
+            nodes: nodes,
+            box: box,
+            scope: scope,
+            image: image == null ? null : _resolveToAbsolutePath(image),
+            scale: scale,
+            rulers: rulers);
       } else {
         await _runQuery(serverUrl);
       }
@@ -411,6 +431,8 @@ void _printUsage() {
   stdout.writeln(
       '  atomcad-cli query --layout            Node boxes and inferred groups');
   stdout.writeln('    [--nodes=a,b | --box=x0,y0,x1,y1] [--scope=m1/m2]');
+  stdout.writeln('    [--image=<path.png> [--scale=2] [--no-rulers]]  '
+      '...and a picture of the same area');
   stdout
       .writeln('  atomcad-cli edit --code="..."         Edit the node network');
   stdout.writeln(
@@ -531,6 +553,8 @@ void _printReplHelp() {
   stdout.writeln('  query --layout [--nodes=a,b | --box=x0,y0,x1,y1] '
       '[--scope=m1/m2]');
   stdout.writeln('                      Node boxes and inferred groups');
+  stdout.writeln('    [--image=<path.png> [--scale=2] [--no-rulers]]');
+  stdout.writeln('                      ...and a picture of the same area');
   stdout.writeln('  edit                Enter edit mode (incremental)');
   stdout.writeln(
       '  edit --replace      Enter edit mode (replace entire network)');
@@ -703,10 +727,33 @@ String _resolveScreenshotOutput(String output) {
   return _resolveToAbsolutePath(output);
 }
 
+/// Why a `query` argument set cannot run, or null when it can.
+String? _layoutArgsProblem(
+    {String? nodes,
+    String? box,
+    String? image,
+    String? scale,
+    required bool rulers}) {
+  if (nodes != null && box != null) {
+    return '--nodes and --box are mutually exclusive';
+  }
+  if (image == null && (scale != null || !rulers)) {
+    return '--scale and --no-rulers need --image';
+  }
+  if (scale != null) {
+    final value = double.tryParse(scale);
+    if (value == null || value <= 0 || value > 4) {
+      return '--scale expects a number above 0 and at most 4, got "$scale"';
+    }
+  }
+  return null;
+}
+
 /// The layout options of a REPL `query` line (`--layout`, `--nodes`, `--box`,
-/// `--scope`, each value as `--opt=v` or `--opt v`), or null when the line
-/// asks for the plain network text. Any of the three filters implies
-/// `--layout`.
+/// `--scope`, `--image`, `--scale`, each value as `--opt=v` or `--opt v`, and
+/// `--no-rulers`), or null when the line asks for the plain network text. Any
+/// filter, `--image`, `--scale` or `--no-rulers` implies `--layout` (the last
+/// two are then refused without `--image`).
 Map<String, String?>? _replLayoutArgs(List<String> args) {
   final out = <String, String?>{};
   var layout = false;
@@ -716,7 +763,11 @@ Map<String, String?>? _replLayoutArgs(List<String> args) {
       layout = true;
       continue;
     }
-    for (final name in const ['nodes', 'box', 'scope']) {
+    if (arg == '--no-rulers') {
+      out['no-rulers'] = '';
+      continue;
+    }
+    for (final name in const ['nodes', 'box', 'scope', 'image', 'scale']) {
       if (arg.startsWith('--$name=')) {
         out[name] = arg.substring(name.length + 3);
       } else if (arg == '--$name' && i + 1 < args.length) {
@@ -729,17 +780,28 @@ Map<String, String?>? _replLayoutArgs(List<String> args) {
 
 /// `query --layout`: the active network's node boxes and inferred groups
 /// (`doc/design_deliberate_node_placement.md` A1).
+///
+/// With [image] (an absolute path), atomCAD also renders the same area of the
+/// canvas to that PNG, and the read-out ends with an `# image:` line.
 Future<void> _runQueryLayout(String serverUrl,
-    {String? nodes, String? box, String? scope}) async {
+    {String? nodes,
+    String? box,
+    String? scope,
+    String? image,
+    String? scale,
+    bool rulers = true}) async {
   try {
     final params = <String, String>{
       if (nodes != null) 'nodes': nodes,
       if (box != null) 'box': box,
       if (scope != null) 'scope': scope,
+      if (image != null) 'image': image,
+      if (scale != null) 'scale': scale,
+      if (image != null && !rulers) 'rulers': 'false',
     };
     final uri = Uri.parse('$serverUrl/layout')
         .replace(queryParameters: params.isEmpty ? null : params);
-    final response = await _get(uri).timeout(const Duration(seconds: 10));
+    final response = await _get(uri).timeout(const Duration(seconds: 30));
 
     if (response.statusCode == 200) {
       stdout.write(response.body);
@@ -1495,13 +1557,26 @@ Future<void> _runRepl(String serverUrl) async {
         final layout = _replLayoutArgs(parts.sublist(1));
         if (layout == null) {
           await _runQuery(serverUrl);
-        } else if (layout['nodes'] != null && layout['box'] != null) {
-          stderr.writeln('Error: --nodes and --box are mutually exclusive');
+          break;
+        }
+        final image = layout['image'];
+        final rulers = !layout.containsKey('no-rulers');
+        final problem = _layoutArgsProblem(
+            nodes: layout['nodes'],
+            box: layout['box'],
+            image: image,
+            scale: layout['scale'],
+            rulers: rulers);
+        if (problem != null) {
+          stderr.writeln('Error: $problem');
         } else {
           await _runQueryLayout(serverUrl,
               nodes: layout['nodes'],
               box: layout['box'],
-              scope: layout['scope']);
+              scope: layout['scope'],
+              image: image == null ? null : _resolveToAbsolutePath(image),
+              scale: layout['scale'],
+              rulers: rulers);
         }
         break;
 

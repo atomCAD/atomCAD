@@ -9,6 +9,7 @@ Interactive visual node graph editor widget. Handles rendering, interaction, and
 | `node_network.dart` | Main editor widget: pan/zoom, selection, wire dragging, keyboard shortcuts |
 | `node_network_content.dart` | What the canvas *contains*, shared by the live editor and the image export: the scope walk, the node-widget switch, the content bounding box |
 | `export_network_image.dart` | *File → Export node network image*: the whole network as a PNG, rendered offscreen at full size |
+| `network_region_capture.dart` | `query --layout --image`: one area of one scope (Rust resolves the frame) through the same snapshot, at 100% zoom, with rulers labelled in scope coordinates |
 | `node_network_painter.dart` | Custom painter: grid, wires (Bezier curves), pin hit testing |
 | `node_widget.dart` | Individual node rendering: pins, title, drag, context menu, HOF body region |
 | `scope_resolver.dart` | Per-frame `ScopeResolver` + `LayoutCache` for scope-aware coordinates, hit testing, and pin-position resolution |
@@ -51,7 +52,8 @@ Three discrete levels with different detail:
 
 ## The canvas is rendered twice (live editor + image export)
 
-*File → Export node network image* renders the same canvas a second time, off
+*File → Export node network image* (and the CLI's `query --layout --image`,
+`network_region_capture.dart`) renders the same canvas a second time, off
 screen, laid out at the full size of the content rather than the viewport, and
 rasterizes it to a PNG (`lib/common/offscreen_capture.dart` explains the private
 build/pipeline-owner trick and what a detached tree may depend on).

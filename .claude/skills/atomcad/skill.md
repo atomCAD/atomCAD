@@ -427,6 +427,43 @@ atomcad-cli query --layout --scope=m1             # a HOF body (path: m1/m2)
 - `--nodes` and `--box` are exclusive. An unknown name prints
   `(no such node)`. Use `--box=…` (with `=`) when a coordinate is negative.
 
+#### `query --layout --image`: a picture of the same area
+
+Add `--image=<path.png>` to any `query --layout` and atomCAD also renders that
+area of the canvas, as the user sees it, to the PNG. Without `--image` nothing
+is rendered.
+
+```bash
+atomcad-cli query --layout --box=0,0,700,600 --image=area.png   # exactly this area
+atomcad-cli query --layout --nodes=cube,hole,diff --image=v.png # framed on these nodes
+atomcad-cli query --layout --scope=m1 --image=body.png          # one HOF body
+atomcad-cli query --layout --image=all.png --scale=2            # whole scope, 2× pixels
+```
+
+The read-out is printed as usual, and its last line says what the image shows:
+
+```
+# image: C:\workrea.png  734×634 px at scale 1; shows (0,0)–(700,600); content from pixel (34,34), rulers labelled in these coordinates
+```
+
+- **A `--box` crops; it does not filter**: everything inside it is drawn,
+  including wires running off its edge. `--nodes` frames those nodes, and no
+  filter the whole scope, both with a 40 px margin.
+- **Same coordinates as the read-out.** The image is drawn at 100% zoom,
+  whatever the canvas shows: one image pixel is one canvas pixel times the
+  scale. The rulers along the top and left edges are labelled in the
+  read-out's coordinates (body-local with `--scope`); `--no-rulers` drops them.
+- **Size.** The longest side is capped at 2000 px, and the scale reduced to fit
+  (the line says so). An area that would need a scale under 0.25 is refused:
+  pick a smaller box. `--scale` (above 0, at most 4) and `--no-rulers` need
+  `--image`.
+- **Selection and active-node highlights are not drawn.** A collapsed body
+  cannot be pictured. Read the PNG to look at it.
+- **When to use it:** to check a non-trivial layout after an edit, or to see
+  what a `wire_over_node` / `crossing` finding means. Not after every edit: an
+  image costs far more context than the text read-out, and the read-out and
+  the findings already say what moved and what broke.
+
 #### Layout statements: saying where things go
 
 An edit script can also place nodes. Three statements, written anywhere in the
@@ -566,6 +603,9 @@ place n below h push down"
 
 # Node boxes on the canvas, and inferred columns/rows (see "query --layout")
 atomcad-cli query --layout [--nodes=a,b | --box=x0,y0,x1,y1] [--scope=m1/m2]
+
+# ...and a picture of the same area (see "query --layout --image")
+atomcad-cli query --layout --box=x0,y0,x1,y1 --image=area.png [--scale=2] [--no-rulers]
 ```
 
 **Query output format:**

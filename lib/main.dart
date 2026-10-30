@@ -13,6 +13,7 @@ import 'package:flutter_cad/common/mouse_wheel_block_service.dart';
 import 'package:flutter_window_close/flutter_window_close.dart';
 import 'package:flutter_cad/common/draggable_dialog.dart';
 import 'package:flutter_cad/ai_assistant/http_server.dart';
+import 'package:flutter_cad/structure_designer/node_network/network_region_capture.dart';
 import 'package:flutter_cad/structure_designer/document_tabs.dart';
 
 /// Global AI assistant server instance.
@@ -180,6 +181,22 @@ class _MyAppState extends State<MyApp> {
         structureDesignerModel.openDocument(path, inSameStretch: inSameStretch);
     _aiServer?.onNewDocument = (inSameStretch) => structureDesignerModel
         .newDocument(directEditing: false, inSameStretch: inSameStretch);
+
+    // `query --layout --image`: the canvas is Flutter's to paint, so the
+    // server hands the frame Rust resolved to the model's capture.
+    _aiServer?.onCaptureNetworkRegion = (
+            {required scopeChain,
+            required scopeRect,
+            required scale,
+            required rulers}) =>
+        captureNetworkRegion(
+          model: structureDesignerModel,
+          flutterView: WidgetsBinding.instance.platformDispatcher.views.first,
+          scopeChain: scopeChain,
+          scopeRect: scopeRect,
+          scale: scale,
+          rulers: rulers,
+        );
 
     // Connect AI assistant server to request re-render (for camera changes)
     _aiServer?.onRenderingNeeded = () {

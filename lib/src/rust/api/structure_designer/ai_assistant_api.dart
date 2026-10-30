@@ -89,6 +89,20 @@ String aiQueryLayout(
     RustLib.instance.api.crateApiStructureDesignerAiAssistantApiAiQueryLayout(
         scope: scope, nodes: nodes, bbox: bbox);
 
+/// The frame `atomcad-cli query --layout --image` draws, for the same three
+/// arguments as [`ai_query_layout`].
+///
+/// # Returns
+/// JSON: `{"scope": [hof ids from the root], "rect": [x, y, w, h]}`, the
+/// rectangle in the scope's own coordinates (body-local inside a body), or
+/// `{"error": "<one line>"}`. A `--box` is the frame exactly; `--nodes` and no
+/// filter frame the nodes with a margin.
+String aiLayoutImageFrame(
+        {required String scope, required String nodes, required String bbox}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerAiAssistantApiAiLayoutImageFrame(
+            scope: scope, nodes: nodes, bbox: bbox);
+
 /// List all available node network names.
 ///
 /// This function returns a list of all node networks available in the current design.

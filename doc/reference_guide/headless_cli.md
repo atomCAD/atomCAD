@@ -202,6 +202,36 @@ row      hole_r, hole       gap 50
 
 In the REPL, `query --layout` takes the same options.
 
+#### A picture of the same area: `--image`
+
+Add `--image=<path.png>` and atomCAD also renders the same area of the node
+network, as the canvas draws it, to that PNG file:
+
+```bash
+atomcad-cli query --layout --box=0,0,700,600 --image=area.png
+atomcad-cli query --layout --nodes=cube,hole,diff --image=parts.png
+atomcad-cli query --layout --scope=holes --image=body.png --scale=2
+```
+
+The read-out ends with a line naming the file, its size, the scale and the area
+it shows. Without `--image`, nothing is rendered.
+
+- **`--box` crops rather than filters.** Everything inside the box is drawn,
+  and wires leaving it run to its edge. `--nodes` frames the named nodes, and no
+  filter the whole network (or body), each with a 40 px margin.
+- **The image uses the read-out's coordinates.** It is always drawn at 100%
+  zoom, whatever the canvas is zoomed to, so one image pixel is one canvas pixel
+  at `--scale=1` (the default; up to 4). Rulers along the top and left edges
+  are labelled in those coordinates — body-local with `--scope`. `--no-rulers`
+  leaves them off.
+- **Size limit.** The longest side is at most 2000 px; a larger area is drawn at
+  a reduced scale, and the last line says so. An area too large to draw legibly
+  (under a quarter scale) is refused.
+- Selection and active-node highlights are left out, as in
+  *File → Export node network image*. The body of a collapsed node cannot be
+  pictured. `--scale` and `--no-rulers` are refused without `--image`.
+- A relative path is resolved against the CLI's working directory.
+
 ### Undoing an edit
 
 Each `atomcad-cli edit` is recorded as a **single undo step** in the running

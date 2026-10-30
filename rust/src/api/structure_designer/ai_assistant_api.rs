@@ -154,6 +154,39 @@ pub fn ai_query_layout(scope: String, nodes: String, bbox: String) -> String {
     }
 }
 
+/// The frame `atomcad-cli query --layout --image` draws, for the same three
+/// arguments as [`ai_query_layout`].
+///
+/// # Returns
+/// JSON: `{"scope": [hof ids from the root], "rect": [x, y, w, h]}`, the
+/// rectangle in the scope's own coordinates (body-local inside a body), or
+/// `{"error": "<one line>"}`. A `--box` is the frame exactly; `--nodes` and no
+/// filter frame the nodes with a margin.
+#[flutter_rust_bridge::frb(sync)]
+pub fn ai_layout_image_frame(scope: String, nodes: String, bbox: String) -> String {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| match cad_instance
+                .structure_designer
+                .active_layout_image_frame(&scope, &nodes, &bbox)
+            {
+                Ok(frame) => serde_json::json!({
+                    "scope": frame.scope_ids,
+                    "rect": [
+                        frame.rect.pos.x,
+                        frame.rect.pos.y,
+                        frame.rect.size.x,
+                        frame.rect.size.y,
+                    ],
+                })
+                .to_string(),
+                Err(message) => serde_json::json!({ "error": message }).to_string(),
+            },
+            r#"{"error":"Could not access structure designer"}"#.to_string(),
+        )
+    }
+}
+
 /// List all available node network names.
 ///
 /// This function returns a list of all node networks available in the current design.

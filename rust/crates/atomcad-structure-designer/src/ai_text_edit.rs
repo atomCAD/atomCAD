@@ -595,6 +595,28 @@ impl StructureDesigner {
             .unwrap_or_else(|message| format!("# Error: {}\n", message))
     }
 
+    /// The frame `query --layout --image` draws, for the same arguments as
+    /// [`query_active_layout`](Self::query_active_layout). `Err` is a one-line
+    /// message.
+    pub fn active_layout_image_frame(
+        &self,
+        scope: &str,
+        nodes: &str,
+        bbox: &str,
+    ) -> Result<layout::ImageFrame, String> {
+        let name = self
+            .active_node_network_name
+            .as_deref()
+            .ok_or_else(|| "no active node network".to_string())?;
+        let network = self
+            .node_type_registry
+            .node_networks
+            .get(name)
+            .ok_or_else(|| format!("network '{}' not found", name))?;
+        let (scope, filter) = layout::parse_readout_args(scope, nodes, bbox)?;
+        layout::layout_image_frame(network, &self.node_type_registry, name, &scope, &filter)
+    }
+
     /// Log an edit that never reached the network and build its `EditResult`.
     /// A dry run is not logged, rejected or not.
     fn reject_ai_edit(

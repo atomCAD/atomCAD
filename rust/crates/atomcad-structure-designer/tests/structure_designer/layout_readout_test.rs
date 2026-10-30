@@ -391,3 +391,111 @@ fn body_scope_readout() {
     out.push_str(&readout(&sd, "m1", "", ""));
     insta::assert_snapshot!(out);
 }
+
+// ============================================================================
+// The image frame (`query --layout --image`)
+// ============================================================================
+
+use atomcad_structure_designer::layout::IMAGE_FRAME_MARGIN;
+
+/// A box is the frame exactly: the image crops, it does not filter.
+#[test]
+fn an_image_of_a_box_is_framed_by_the_box() {
+    let (sd, _) = column_and_row();
+    let frame = sd
+        .active_layout_image_frame("", "", "700,600,-50,10")
+        .unwrap();
+    assert!(frame.scope_ids.is_empty());
+    assert_eq!(frame.rect.pos, DVec2::new(-50.0, 10.0));
+    assert_eq!(frame.rect.size, DVec2::new(750.0, 590.0));
+}
+
+/// `--nodes` frames the named nodes, and no filter the whole scope, each with
+/// the margin; an unknown name is skipped, as the read-out lists it.
+#[test]
+fn an_image_of_nodes_or_of_everything_frames_them_with_the_margin() {
+    let (sd, size) = column_and_row();
+    let m = IMAGE_FRAME_MARGIN;
+
+    let frame = sd.active_layout_image_frame("", "w,far,nope", "").unwrap();
+    assert_eq!(frame.rect.pos, DVec2::new(100.0 - m, 100.0 - m));
+    assert_eq!(
+        frame.rect.size,
+        DVec2::new(1000.0 + size.x - 100.0 + 2.0 * m, size.y + 2.0 * m)
+    );
+
+    let all = sd.active_layout_image_frame("", "", "").unwrap();
+    // The extent the read-out's header prints, plus the margin.
+    assert_eq!(all.rect.pos, DVec2::new(98.0 - m, 100.0 - m));
+    assert_eq!(all.rect.right(), 1000.0 + size.x + m);
+}
+
+#[test]
+fn an_image_with_nothing_to_frame_is_an_error() {
+    let (sd, _) = column_and_row();
+    assert!(
+        sd.active_layout_image_frame("", "nope", "")
+            .unwrap_err()
+            .contains("none of the named nodes")
+    );
+    assert!(
+        sd.active_layout_image_frame("", "", "5,5,5,90")
+            .unwrap_err()
+            .contains("no area")
+    );
+    let empty = designer();
+    assert!(
+        empty
+            .active_layout_image_frame("", "", "")
+            .unwrap_err()
+            .contains("no nodes")
+    );
+    assert_eq!(
+        empty
+            .active_layout_image_frame("", "a", "0,0,1,1")
+            .unwrap_err(),
+        "--nodes and --box are mutually exclusive"
+    );
+}
+
+/// A body is framed in body coordinates and names its HOF chain; a body that
+/// is collapsed is not drawn, so it cannot be pictured.
+#[test]
+fn an_image_of_a_body_carries_its_chain_and_a_collapsed_one_is_refused() {
+    let mut sd = designer();
+    let outcome = sd.ai_text_edit(MAP_WITH_BODY, false);
+    assert!(outcome.result.success, "{:?}", outcome.result.errors);
+    let m1_id = sd.node_type_registry.node_networks["main"]
+        .nodes
+        .values()
+        .find(|node| node.custom_name.as_deref() == Some("m1"))
+        .unwrap()
+        .id;
+
+    let frame = sd.active_layout_image_frame("m1", "d", "").unwrap();
+    assert_eq!(frame.scope_ids, vec![m1_id]);
+    let d = sd.node_type_registry.node_networks["main"].nodes[&m1_id]
+        .zone
+        .as_deref()
+        .unwrap()
+        .nodes
+        .values()
+        .find(|node| node.custom_name.as_deref() == Some("d"))
+        .unwrap()
+        .position;
+    assert_eq!(frame.rect.pos, d - DVec2::splat(IMAGE_FRAME_MARGIN));
+
+    sd.node_type_registry
+        .node_networks
+        .get_mut("main")
+        .unwrap()
+        .nodes
+        .get_mut(&m1_id)
+        .unwrap()
+        .collapse_mode = atomcad_structure_designer::node_network::CollapseMode::Collapsed;
+    assert!(
+        sd.active_layout_image_frame("m1", "", "")
+            .unwrap_err()
+            .contains("collapsed")
+    );
+}

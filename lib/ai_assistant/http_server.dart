@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'dart:typed_data';
+import 'dart:ui' show Rect;
 
 import 'constants.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/ai_assistant_api.dart'
@@ -27,6 +28,8 @@ import 'package:flutter_cad/src/rust/api/common_api_types.dart';
 import 'package:flutter_cad/src/rust/api/screenshot_api.dart' as screenshot_api;
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_preferences.dart'
     as prefs_api;
+import 'package:flutter_cad/common/number_format.dart';
+import 'package:flutter_cad/structure_designer/node_network/network_region_capture.dart';
 
 /// HTTP server for AI assistant integration.
 ///
@@ -38,7 +41,10 @@ import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_p
 /// - `GET /health` - Health check, returns `{"status": "ok"}`
 /// - `GET /query` - Returns the active node network in text format
 /// - `GET /layout?nodes=a,b|box=x0,y0,x1,y1&scope=m1/m2` - The layout
-///   read-out: node boxes and inferred groups (`query --layout`)
+///   read-out: node boxes and inferred groups (`query --layout`). With
+///   `image=<path>` (and optionally `scale=<s>`, `rulers=false`) it also
+///   renders the same area of the canvas to that PNG and ends with an
+///   `# image:` line (`query --layout --image`)
 /// - `POST /edit?replace=true|false&dry_run=true|false` - Applies text format
 ///   edits to the network. With `dry_run=true` the edit runs in full, its
 ///   result (with `"dry_run": true`) is returned, and it is reverted: no undo
@@ -219,6 +225,25 @@ class AiAssistantServer {
   /// each one would make reading the network more expensive than editing it.
   /// This one only refreshes the history panel.
   void Function()? onCliActivity;
+
+  /// Renders one area of the active network's canvas to a PNG
+  /// (`query --layout --image`). Set by `main.dart` to
+  /// [captureNetworkRegion] over the model, which only the UI layer holds;
+  /// `/layout?image=` reports an error without it. It must do everything that
+  /// reads the model before its first `await`, as [captureNetworkRegion]
+  /// does: the request's API calls end there (D8).
+  Future<NetworkRegionCapture> Function({
+    required List<BigInt> scopeChain,
+    required Rect scopeRect,
+    required double scale,
+    required bool rulers,
+  })? onCaptureNetworkRegion;
+
+  /// Work a handler started in its synchronous stretch and that must finish
+  /// before the response closes: the PNG encoding and file write of
+  /// `/layout?image=`. Awaited *after* the activity record, so nothing that
+  /// touches the active document runs after an `await` (D8).
+  Future<void>? _pendingResponse;
 
   AiAssistantServer({this.port = aiAssistantPort});
 
@@ -412,6 +437,9 @@ class AiAssistantServer {
     // stops short of flushing the response, which is negligible on loopback.
     final status = request.response.statusCode;
     _recordActivity(request, path, status, stopwatch);
+    final pending = _pendingResponse;
+    _pendingResponse = null;
+    if (pending != null) await pending;
     await request.response.close();
   }
 
@@ -525,13 +553,96 @@ class AiAssistantServer {
       return;
     }
     final params = request.uri.queryParameters;
-    final result = ai_api.aiQueryLayout(
-      scope: params['scope'] ?? '',
-      nodes: params['nodes'] ?? '',
-      bbox: params['box'] ?? '',
-    );
+    final scope = params['scope'] ?? '';
+    final nodes = params['nodes'] ?? '';
+    final box = params['box'] ?? '';
+    final result = ai_api.aiQueryLayout(scope: scope, nodes: nodes, bbox: box);
     request.response.headers.contentType = ContentType.text;
     request.response.write(result);
+
+    final image = params['image'];
+    if (image == null || image.isEmpty || result.startsWith('# Error')) {
+      return;
+    }
+    final line = _startRegionImage(
+      path: image,
+      scope: scope,
+      nodes: nodes,
+      box: box,
+      scale: double.tryParse(params['scale'] ?? '') ?? 1.0,
+      rulers: params['rulers'] != 'false',
+      response: request.response,
+    );
+    if (line != null) request.response.write(line);
+  }
+
+  /// Starts rendering the image `/layout?image=` asks for. Returns the line to
+  /// append now when it failed before rendering; otherwise leaves the rest in
+  /// [_pendingResponse], which appends the `# image:` line once the PNG is on
+  /// disk.
+  String? _startRegionImage({
+    required String path,
+    required String scope,
+    required String nodes,
+    required String box,
+    required double scale,
+    required bool rulers,
+    required HttpResponse response,
+  }) {
+    final capture = onCaptureNetworkRegion;
+    if (capture == null) {
+      return '# Error: image: this atomCAD cannot render the canvas\n';
+    }
+    final frame = jsonDecode(
+            ai_api.aiLayoutImageFrame(scope: scope, nodes: nodes, bbox: box))
+        as Map<String, dynamic>;
+    if (frame['error'] != null) return '# Error: image: ${frame['error']}\n';
+    final chain = [
+      for (final id in frame['scope'] as List) BigInt.from(id as num)
+    ];
+    final r = [for (final v in frame['rect'] as List) (v as num).toDouble()];
+    final scopeRect = Rect.fromLTWH(r[0], r[1], r[2], r[3]);
+
+    final Future<NetworkRegionCapture> rendering;
+    try {
+      // Synchronous up to the rasterization: every model read happens here.
+      rendering = capture(
+          scopeChain: chain,
+          scopeRect: scopeRect,
+          scale: scale,
+          rulers: rulers);
+    } on NetworkRegionException catch (e) {
+      return '# Error: image: ${e.message}\n';
+    }
+    _pendingResponse = () async {
+      try {
+        final shot = await rendering;
+        await File(path).writeAsBytes(shot.pngBytes, flush: true);
+        response.write(_regionImageLine(path, shot, scopeRect, scale, rulers));
+      } catch (e) {
+        response.write('# Error: image: $e\n');
+      }
+    }();
+    return null;
+  }
+
+  /// The read-out's last line: where the image is and how its pixels map to
+  /// the coordinates the read-out prints.
+  static String _regionImageLine(String path, NetworkRegionCapture shot,
+      Rect area, double requested, bool rulers) {
+    String n(double v) => formatNatural(v, 3);
+    final corners = '(${area.left.round()},${area.top.round()})–'
+        '(${area.right.round()},${area.bottom.round()})';
+    final reduced = shot.scale < requested - 1e-9
+        ? ' (reduced from ${n(requested)} to fit $NETWORK_REGION_MAX_SIDE px)'
+        : '';
+    final offset = shot.contentOffsetPx.round();
+    final where = rulers
+        ? '; content from pixel ($offset,$offset), rulers labelled in these '
+            'coordinates'
+        : '';
+    return '# image: $path  ${shot.widthPx}×${shot.heightPx} px at scale '
+        '${n(shot.scale)}$reduced; shows $corners$where\n';
   }
 
   void _handleEdit(HttpRequest request, String body) {

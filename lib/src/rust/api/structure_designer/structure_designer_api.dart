@@ -2838,6 +2838,7 @@ String serializeActiveNetworkToText() => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiSerializeActiveNetworkToText();
 
 /// Apply text format edits to the active node network (replace mode with position preservation).
+/// An edit with an error leaves the network unchanged.
 APITextEditResult applyTextToActiveNetwork({required String code}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiApplyTextToActiveNetwork(

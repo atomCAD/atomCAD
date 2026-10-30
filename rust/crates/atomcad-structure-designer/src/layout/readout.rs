@@ -116,25 +116,7 @@ pub fn layout_readout(
     scope: &[String],
     filter: &ReadoutFilter,
 ) -> Result<String, String> {
-    let mut current = network;
-    for (depth, segment) in scope.iter().enumerate() {
-        let names = unique_node_names(current);
-        let where_ = if depth == 0 {
-            network_name.to_string()
-        } else {
-            format!("{}/{}", network_name, scope[..depth].join("/"))
-        };
-        let Some(id) = names
-            .iter()
-            .find_map(|(id, name)| (name == segment).then_some(*id))
-        else {
-            return Err(format!("no node '{}' in {}", segment, where_));
-        };
-        let Some(body) = current.nodes[&id].zone.as_deref() else {
-            return Err(format!("'{}' in {} has no body", segment, where_));
-        };
-        current = body;
-    }
+    let (current, _) = resolve_scope(network, network_name, scope)?;
 
     let items = scope_items(current, registry);
     let groups = detect_groups(&items);
@@ -259,6 +241,117 @@ pub fn layout_readout(
         push_table(&mut out, &rows, 0);
     }
     Ok(out)
+}
+
+/// The network `scope` names inside `network`, with the ids of the HOF chain
+/// that leads to it. `Err` when a segment names no node or a node without a
+/// body.
+fn resolve_scope<'n>(
+    network: &'n NodeNetwork,
+    network_name: &str,
+    scope: &[String],
+) -> Result<(&'n NodeNetwork, Vec<u64>), String> {
+    let mut current = network;
+    let mut ids = Vec::new();
+    for (depth, segment) in scope.iter().enumerate() {
+        let names = unique_node_names(current);
+        let where_ = if depth == 0 {
+            network_name.to_string()
+        } else {
+            format!("{}/{}", network_name, scope[..depth].join("/"))
+        };
+        let Some(id) = names
+            .iter()
+            .find_map(|(id, name)| (name == segment).then_some(*id))
+        else {
+            return Err(format!("no node '{}' in {}", segment, where_));
+        };
+        let Some(body) = current.nodes[&id].zone.as_deref() else {
+            return Err(format!("'{}' in {} has no body", segment, where_));
+        };
+        ids.push(id);
+        current = body;
+    }
+    Ok((current, ids))
+}
+
+/// Whitespace around the nodes an image frames, in canvas px. Not used for a
+/// `--box`, which is the frame exactly.
+pub const IMAGE_FRAME_MARGIN: f64 = 40.0;
+
+/// What `query --layout --image` draws: a rectangle in one scope's
+/// coordinates (body-local inside a body, as the read-out prints them).
+#[derive(Debug, Clone, PartialEq)]
+pub struct ImageFrame {
+    /// The ids of the HOF chain down to the scope; empty for the root.
+    pub scope_ids: Vec<u64>,
+    pub rect: Rect,
+}
+
+/// The frame of the image the read-out with the same arguments describes.
+///
+/// [`ReadoutFilter::Box`] is the box itself: an image crops, it does not
+/// filter, so everything inside it is drawn. [`ReadoutFilter::Nodes`] frames the
+/// named nodes (unknown names are skipped; the read-out reports them) and
+/// [`ReadoutFilter::All`] the whole scope, both with [`IMAGE_FRAME_MARGIN`].
+/// `Err` when there is nothing to frame, or the scope is a body that is not
+/// drawn because it is collapsed.
+pub fn layout_image_frame(
+    network: &NodeNetwork,
+    registry: &NodeTypeRegistry,
+    network_name: &str,
+    scope: &[String],
+    filter: &ReadoutFilter,
+) -> Result<ImageFrame, String> {
+    let (current, scope_ids) = resolve_scope(network, network_name, scope)?;
+    // Every HOF on the way down must draw its body, or nothing inside is on
+    // the canvas.
+    let mut owner_scope = network;
+    for (depth, id) in scope_ids.iter().enumerate() {
+        let owner = &owner_scope.nodes[id];
+        let collapsed = registry
+            .get_node_type_for_node(owner)
+            .is_none_or(|nt| !nt.has_zone() || resolve_body_collapsed(owner, nt));
+        if collapsed {
+            return Err(format!(
+                "the body of '{}' is collapsed, so nothing in it is drawn",
+                scope[..=depth].join("/")
+            ));
+        }
+        owner_scope = owner.zone.as_deref().expect("resolve_scope checked it");
+    }
+
+    let items = scope_items(current, registry);
+    let union = |rects: &mut dyn Iterator<Item = Rect>| -> Option<Rect> {
+        rects.reduce(|a, b| bounding_box(&a, &b)).map(|r| {
+            Rect::new(
+                r.pos - DVec2::splat(IMAGE_FRAME_MARGIN),
+                r.size + DVec2::splat(2.0 * IMAGE_FRAME_MARGIN),
+            )
+        })
+    };
+    let rect = match filter {
+        ReadoutFilter::Box(area) => {
+            if area.size.x <= 0.0 || area.size.y <= 0.0 {
+                return Err("--box has no area".to_string());
+            }
+            Some(*area)
+        }
+        ReadoutFilter::All => union(&mut items.iter().map(|item| item.rect)),
+        ReadoutFilter::Nodes(names) => union(
+            &mut items
+                .iter()
+                .filter(|item| names.contains(&item.name))
+                .map(|item| item.rect),
+        ),
+    };
+    let rect = rect.ok_or_else(|| match filter {
+        ReadoutFilter::Nodes(_) => {
+            "none of the named nodes exist, so there is nothing to frame".to_string()
+        }
+        _ => "the scope has no nodes, so there is nothing to frame".to_string(),
+    })?;
+    Ok(ImageFrame { scope_ids, rect })
 }
 
 /// Every node of `scope` with its name, box and tags, sorted by top, then
