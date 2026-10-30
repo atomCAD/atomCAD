@@ -419,6 +419,13 @@ equality test (`layout_columns_test::a_uniform_network_keeps_the_old_column_pitc
 green — a "tidier" pitch would shift every existing drawing the first time
 someone reflows it.
 
+**Crossing reduction is pin-aware.** Every `LayerEdge` carries the `Port` of
+the pin at each end (a fraction down the node's side; dummies sit at the
+middle), and both the barycenters and `count_crossings` measure a wire end as
+*layer index + port*. Counting between nodes alone, two producers feeding
+`diff.base` and `diff.sub` tie at zero crossings and the drawn order is an
+accident. A new edge must carry real ports, not a constant.
+
 `find_connected_components` seeds its BFS from **sorted** ids. The size sort
 after it is stable, so `HashMap` order used to decide how two equal-size
 components stacked, per process. Any new iteration over nodes or scopes must be

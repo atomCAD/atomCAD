@@ -24,7 +24,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use glam::DVec2;
 
 use crate::node_layout;
-use crate::node_network::NodeNetwork;
+use crate::node_network::{NodeNetwork, SourcePin};
 use crate::node_type_registry::NodeTypeRegistry;
 
 use super::common::{
@@ -74,14 +74,38 @@ enum Direction {
     Forward,
 }
 
+/// Where along a node's side a wire meets it, as a fraction of the way down
+/// that side, in `[0, 1)`.
+///
+/// Crossing reduction measures a wire end as *layer position + port*, so two
+/// wires into one node are ordered like the pins they land on. Counting
+/// between nodes alone, both orders of two producers feeding `diff.base` and
+/// `diff.sub` score zero crossings, and which one ends up on top is an
+/// accident; drawn, the wrong one crosses.
+pub type Port = f64;
+
+/// The port of a dummy node, which has a single pass-through point.
+const DUMMY_PORT: Port = 0.5;
+
+/// One edge of the layered graph, with the ports at both ends.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct LayerEdge {
+    pub from: LayerNode,
+    pub to: LayerNode,
+    /// On `from`'s output side.
+    pub from_port: Port,
+    /// On `to`'s input side.
+    pub to_port: Port,
+}
+
 /// The layered graph with dummy nodes inserted.
 #[derive(Debug)]
 pub struct LayeredGraph {
     pub layers: Vec<Layer>,
-    /// Maps each layer node to its neighbors in the next layer.
-    pub forward_edges: HashMap<LayerNode, Vec<LayerNode>>,
-    /// Maps each layer node to its neighbors in the previous layer.
-    pub backward_edges: HashMap<LayerNode, Vec<LayerNode>>,
+    /// Maps each layer node to its edges into the next layer.
+    pub forward_edges: HashMap<LayerNode, Vec<LayerEdge>>,
+    /// Maps each layer node to its edges from the previous layer.
+    pub backward_edges: HashMap<LayerNode, Vec<LayerEdge>>,
 }
 
 impl LayeredGraph {
@@ -94,9 +118,9 @@ impl LayeredGraph {
     }
 
     /// Add an edge between two layer nodes.
-    pub fn add_edge(&mut self, from: LayerNode, to: LayerNode) {
-        self.forward_edges.entry(from).or_default().push(to);
-        self.backward_edges.entry(to).or_default().push(from);
+    pub fn add_edge(&mut self, edge: LayerEdge) {
+        self.forward_edges.entry(edge.from).or_default().push(edge);
+        self.backward_edges.entry(edge.to).or_default().push(edge);
     }
 
     /// Get the layer index for a node.
@@ -348,7 +372,7 @@ fn layout_single_component(
     let layers = group_by_depth(&component_depths);
 
     // Phase 2: Dummy node insertion
-    let mut graph = insert_dummy_nodes(&layers, network, &component_depths);
+    let mut graph = insert_dummy_nodes(&layers, network, registry, &component_depths);
 
     // Phase 3: Crossing minimization
     minimize_crossings(&mut graph);
@@ -392,9 +416,13 @@ fn group_by_depth(depths: &HashMap<u64, usize>) -> Vec<Vec<u64>> {
 /// dummy nodes are inserted at each intermediate layer to:
 /// - Enable proper edge routing with bend points
 /// - Allow crossing minimization to account for long edges
+///
+/// Every edge carries the [`Port`]s of the pins it joins; a dummy's are
+/// [`DUMMY_PORT`].
 fn insert_dummy_nodes(
     layers: &[Vec<u64>],
     network: &NodeNetwork,
+    registry: &NodeTypeRegistry,
     depths: &HashMap<u64, usize>,
 ) -> LayeredGraph {
     if layers.is_empty() {
@@ -410,13 +438,25 @@ fn insert_dummy_nodes(
         }
     }
 
-    // For each edge, insert dummy nodes if it spans multiple layers
-    for (&node_id, node) in &network.nodes {
+    // For each edge, insert dummy nodes if it spans multiple layers.
+    //
+    // Targets are visited in ascending id order, never in `HashMap` order
+    // (`doc/design_incremental_layout.md` D7): each node's edge lists come out
+    // in this order, `find_primary_output` takes the first, and dummies join
+    // their layers in it, so `HashMap` order would decide where a node is
+    // aligned, per process.
+    let mut target_ids: Vec<u64> = network.nodes.keys().copied().collect();
+    target_ids.sort_unstable();
+
+    for node_id in target_ids {
+        let node = &network.nodes[&node_id];
         let Some(&target_layer) = depths.get(&node_id) else {
             continue;
         };
 
-        for arg in &node.arguments {
+        let arg_count = node.arguments.len();
+        for (arg_index, arg) in node.arguments.iter().enumerate() {
+            let to_port = slot_port(arg_index, arg_count);
             for wire in &arg.incoming_wires {
                 if wire.source_scope_depth != 0 {
                     continue; // not an edge of this graph; see the component scan
@@ -431,27 +471,75 @@ fn insert_dummy_nodes(
                     continue;
                 }
 
+                let from_port = output_port(network, registry, source_id, &wire.source_pin);
+
                 if target_layer - source_layer > 1 {
                     // Long edge: insert dummy nodes
                     let mut prev = LayerNode::Real(source_id);
+                    let mut prev_port = from_port;
 
                     for (seg_idx, layer_idx) in (source_layer + 1..target_layer).enumerate() {
                         let dummy = LayerNode::Dummy(source_id, node_id, seg_idx);
                         graph.layers[layer_idx].nodes.push(dummy);
-                        graph.add_edge(prev, dummy);
+                        graph.add_edge(LayerEdge {
+                            from: prev,
+                            to: dummy,
+                            from_port: prev_port,
+                            to_port: DUMMY_PORT,
+                        });
                         prev = dummy;
+                        prev_port = DUMMY_PORT;
                     }
 
-                    graph.add_edge(prev, LayerNode::Real(node_id));
+                    graph.add_edge(LayerEdge {
+                        from: prev,
+                        to: LayerNode::Real(node_id),
+                        from_port: prev_port,
+                        to_port,
+                    });
                 } else {
                     // Short edge: direct connection
-                    graph.add_edge(LayerNode::Real(source_id), LayerNode::Real(node_id));
+                    graph.add_edge(LayerEdge {
+                        from: LayerNode::Real(source_id),
+                        to: LayerNode::Real(node_id),
+                        from_port,
+                        to_port,
+                    });
                 }
             }
         }
     }
 
     graph
+}
+
+/// The port of slot `index` out of `count` slots stacked down one side, at the
+/// slot's middle.
+fn slot_port(index: usize, count: usize) -> Port {
+    (index as f64 + 0.5) / count.max(index + 1) as f64
+}
+
+/// The port of the output pin a wire leaves from. The function pin (`-1`) is
+/// in the title bar, above every output; a zone-input pin sits inside a body
+/// and never leaves on this side, so it takes the middle.
+fn output_port(
+    network: &NodeNetwork,
+    registry: &NodeTypeRegistry,
+    node_id: u64,
+    pin: &SourcePin,
+) -> Port {
+    match *pin {
+        SourcePin::NodeOutput { pin_index } if pin_index < 0 => 0.0,
+        SourcePin::NodeOutput { pin_index } => {
+            let count = network
+                .nodes
+                .get(&node_id)
+                .and_then(|node| registry.get_node_type_for_node(node))
+                .map_or(1, |node_type| node_type.output_pins.len());
+            slot_port(pin_index as usize, count)
+        }
+        SourcePin::ZoneInput { .. } => DUMMY_PORT,
+    }
 }
 
 // =============================================================================
@@ -509,27 +597,38 @@ fn minimize_crossings(graph: &mut LayeredGraph) {
 }
 
 /// Compute the barycenter (average position) for a node based on its neighbors.
+///
+/// A neighbor's position is its index in its layer plus the [`Port`] the edge
+/// meets it at, so the barycenter sees which pin a wire lands on.
 fn compute_barycenter(
     node: LayerNode,
     neighbor_positions: &HashMap<LayerNode, usize>,
-    edges: &HashMap<LayerNode, Vec<LayerNode>>,
+    edges: &HashMap<LayerNode, Vec<LayerEdge>>,
+    direction: Direction,
 ) -> f64 {
-    let neighbors = match edges.get(&node) {
-        Some(n) if !n.is_empty() => n,
+    let edges = match edges.get(&node) {
+        Some(e) if !e.is_empty() => e,
         _ => return f64::MAX, // No neighbors, sort to end
     };
 
-    let positions: Vec<usize> = neighbors
+    let positions: Vec<f64> = edges
         .iter()
-        .filter_map(|n| neighbor_positions.get(n).copied())
+        .filter_map(|edge| {
+            let (neighbor, port) = match direction {
+                Direction::Backward => (edge.from, edge.from_port),
+                Direction::Forward => (edge.to, edge.to_port),
+            };
+            neighbor_positions
+                .get(&neighbor)
+                .map(|&pos| pos as f64 + port)
+        })
         .collect();
 
     if positions.is_empty() {
         return f64::MAX;
     }
 
-    let sum: usize = positions.iter().sum();
-    sum as f64 / positions.len() as f64
+    positions.iter().sum::<f64>() / positions.len() as f64
 }
 
 /// Reorder nodes in a layer based on the barycenter of their neighbors.
@@ -568,7 +667,7 @@ fn reorder_by_barycenter(graph: &mut LayeredGraph, layer_idx: usize, direction: 
         .nodes
         .iter()
         .map(|&node| {
-            let bc = compute_barycenter(node, &neighbor_positions, edges);
+            let bc = compute_barycenter(node, &neighbor_positions, edges, direction);
             (node, bc)
         })
         .collect();
@@ -582,11 +681,13 @@ fn reorder_by_barycenter(graph: &mut LayeredGraph, layer_idx: usize, direction: 
 
 /// Count the number of edge crossings between two adjacent layers.
 ///
-/// Two edges cross if and only if their source positions and target positions
-/// have opposite orderings.
+/// Two edges cross if and only if their source ends and target ends have
+/// opposite orderings. An end is its node's index in the layer plus its
+/// [`Port`], so two wires into different pins of one node are ordered too;
+/// two wires sharing an end (one pin, or one output fanning out) never cross.
 fn count_crossings(graph: &LayeredGraph, layer_a: usize, layer_b: usize) -> usize {
-    // Collect all edges between layer_a and layer_b as (source_pos, target_pos)
-    let mut edges: Vec<(usize, usize)> = Vec::new();
+    // Collect all edges between layer_a and layer_b as (source end, target end)
+    let mut edges: Vec<(f64, f64)> = Vec::new();
 
     // Build position map for layer_b
     let pos_b: HashMap<LayerNode, usize> = graph.layers[layer_b]
@@ -597,10 +698,10 @@ fn count_crossings(graph: &LayeredGraph, layer_a: usize, layer_b: usize) -> usiz
         .collect();
 
     for (idx_a, &node_a) in graph.layers[layer_a].nodes.iter().enumerate() {
-        if let Some(targets) = graph.forward_edges.get(&node_a) {
-            for &target in targets {
-                if let Some(&idx_b) = pos_b.get(&target) {
-                    edges.push((idx_a, idx_b));
+        if let Some(out_edges) = graph.forward_edges.get(&node_a) {
+            for edge in out_edges {
+                if let Some(&idx_b) = pos_b.get(&edge.to) {
+                    edges.push((idx_a as f64 + edge.from_port, idx_b as f64 + edge.to_port));
                 }
             }
         }
@@ -794,10 +895,11 @@ fn find_primary_output(node_id: u64, graph: &LayeredGraph, layer_idx: usize) -> 
     }
 
     // Get forward edges from this node
-    let targets = graph.forward_edges.get(&node)?;
+    let edges = graph.forward_edges.get(&node)?;
 
     // Find the first real node target in the next layer
-    for &target in targets {
+    for edge in edges {
+        let target = edge.to;
         if let LayerNode::Real(target_id) = target {
             // Check if this target is in the next layer
             if graph.layers[next_layer_idx].nodes.contains(&target) {
@@ -871,9 +973,12 @@ pub fn count_total_crossings(graph: &LayeredGraph) -> usize {
 
 /// Create a layered graph for testing purposes.
 /// Exposes the internal insert_dummy_nodes function.
-pub fn create_layered_graph_for_testing(network: &NodeNetwork) -> LayeredGraph {
+pub fn create_layered_graph_for_testing(
+    network: &NodeNetwork,
+    registry: &NodeTypeRegistry,
+) -> LayeredGraph {
     let all: HashSet<u64> = network.nodes.keys().copied().collect();
     let depths = compute_node_depths_within(network, &all);
     let layers = group_by_depth(&depths);
-    insert_dummy_nodes(&layers, network, &depths)
+    insert_dummy_nodes(&layers, network, registry, &depths)
 }

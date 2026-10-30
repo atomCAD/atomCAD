@@ -157,7 +157,7 @@ fn test_dummy_nodes_for_long_edges() {
     );
 
     // Create the layered graph and verify dummy nodes were inserted
-    let graph = create_layered_graph_for_testing(network);
+    let graph = create_layered_graph_for_testing(network, &designer.node_type_registry);
 
     // Should have 3 layers (depths 0, 1, 2)
     assert_eq!(
@@ -198,7 +198,7 @@ fn test_no_dummy_nodes_for_adjacent_layers() {
         .get("test_network")
         .unwrap();
 
-    let graph = create_layered_graph_for_testing(network);
+    let graph = create_layered_graph_for_testing(network, &designer.node_type_registry);
 
     // Should have 2 layers with no dummy nodes
     assert_eq!(graph.layers.len(), 2);
@@ -269,6 +269,119 @@ fn test_crossing_minimization_diamond_pattern() {
         (pos_sphere1.y - pos_sphere2.y).abs() > 1.0,
         "Spheres should have different Y positions"
     );
+}
+
+/// Two producers feeding two pins of one node must be ordered like the pins.
+/// Counting crossings between nodes, both orders score zero, so the order was
+/// an accident; here it put `cube` (into `diff.base`, the upper pin) under
+/// `hole` (into `diff.sub`), and the two wires crossed.
+#[test]
+fn test_crossing_minimization_orders_producers_by_pin() {
+    //   radius -> hole ──────────> diff.sub
+    //   cube  ───────────────────> diff.base
+    let mut designer = setup_designer_with_network("test_network");
+    let radius = designer.add_node("int", DVec2::ZERO);
+    let cube = designer.add_node("cuboid", DVec2::ZERO);
+    let hole = designer.add_node("sphere", DVec2::ZERO);
+    let diff = designer.add_node("diff", DVec2::ZERO);
+
+    designer.connect_nodes(radius, 0, hole, 1); // sphere.radius
+    designer.connect_nodes(cube, 0, diff, 0); // diff.base
+    designer.connect_nodes(hole, 0, diff, 1); // diff.sub
+
+    let network = designer
+        .node_type_registry
+        .node_networks
+        .get("test_network")
+        .unwrap();
+    let positions = compute_layout(
+        network,
+        &designer.node_type_registry,
+        LayoutAlgorithm::Sugiyama,
+    );
+
+    // Both wires leave from output pin 0, so the node tops order the wire ends.
+    let cube_y = positions[&cube].y;
+    let hole_y = positions[&hole].y;
+    assert!(
+        cube_y < hole_y,
+        "cube feeds diff.base, above diff.sub, so it must sit above hole: cube.y = {cube_y}, hole.y = {hole_y}"
+    );
+}
+
+/// The same rule one layer apart, where the producers share a layer and the
+/// pin order is the only thing that can decide between them.
+#[test]
+fn test_crossing_minimization_orders_same_layer_producers_by_pin() {
+    let mut designer = setup_designer_with_network("test_network");
+    // Created in the opposite order to the pins, so id order cannot help.
+    let second = designer.add_node("cuboid", DVec2::ZERO);
+    let first = designer.add_node("cuboid", DVec2::ZERO);
+    let diff = designer.add_node("diff", DVec2::ZERO);
+
+    designer.connect_nodes(first, 0, diff, 0); // diff.base
+    designer.connect_nodes(second, 0, diff, 1); // diff.sub
+
+    let network = designer
+        .node_type_registry
+        .node_networks
+        .get("test_network")
+        .unwrap();
+    let positions = compute_layout(
+        network,
+        &designer.node_type_registry,
+        LayoutAlgorithm::Sugiyama,
+    );
+
+    assert!(
+        positions[&first].y < positions[&second].y,
+        "the producer of diff.base must sit above the producer of diff.sub"
+    );
+}
+
+/// The same network laid out again gives the same drawing. Every fresh
+/// `HashMap` has its own seed, so building the network anew each time
+/// exercises the iteration orders a layout must not depend on
+/// (`doc/design_incremental_layout.md` D7). `r` feeds two nodes in the next
+/// layer, and which one it was aligned with used to follow `HashMap` order.
+#[test]
+fn test_sugiyama_layout_is_deterministic() {
+    const SCRIPT: &str =
+        "inc = expr { expression: \"n + 1\", parameters: [{ name: \"n\", data_type: Int }] }
+r = range { count: 2 }
+mp = map { xs: r, input_type: Int, output_type: Int, f: @inc }
+mq = map { xs: r, input_type: Int, output_type: Int }
+cp = collect { iter: mp }
+cq = collect { iter: mq }
+";
+    let layout_once = || {
+        let mut designer = setup_designer_with_network("test_network");
+        designer.ai_text_edit(SCRIPT, true);
+        let network = designer
+            .node_type_registry
+            .node_networks
+            .get("test_network")
+            .unwrap();
+        let positions = compute_layout(
+            network,
+            &designer.node_type_registry,
+            LayoutAlgorithm::Sugiyama,
+        );
+        let mut named: Vec<(String, f64, f64)> = positions
+            .iter()
+            .map(|(id, p)| {
+                let name = network.nodes[id].custom_name.clone().unwrap_or_default();
+                (name, p.x, p.y)
+            })
+            .collect();
+        named.sort_by(|a, b| a.0.cmp(&b.0));
+        named
+    };
+
+    let first = layout_once();
+    for _ in 0..15 {
+        assert_eq!(layout_once(), first);
+    }
 }
 
 #[test]
