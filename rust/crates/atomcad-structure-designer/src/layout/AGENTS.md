@@ -232,8 +232,15 @@ layout's ordinary 30 px vertical clearance, so they must be collision-tested at
 `place_comments` has. Test them at 30 and all four are rejected every time, and
 every new anchored comment silently falls through to the Step 5 fallback.
 **Step 8** pulls a comment whose distance to its anchor *grew* during the pass
-back to its exact original offset, if that spot is free. It is all-or-nothing
-and has no constant: it can never move a comment away from its anchor, never
+back to its exact original offset, if that spot is free, else to the free
+`surrounding_candidates` spot nearest it that is closer to the anchor than the
+comment is now. "Free" is tested at `COMMENT_CLEARANCE` like Step 7, and
+**ignores every node that kept its offset to the anchor** (the anchor itself,
+the rest of a group moved together, a wire anchor's ends): the exact offset
+restores the comment's relation to precisely those nodes. Test it at
+`VERTICAL_GAP` with the anchor as an obstacle and a comment drawn beside its
+node can never return — which is how comments came to stay behind when their
+anchor was placed. It can never move a comment away from its anchor, never
 create an overlap, and never act on an anchor it cannot resolve on both the
 before and the after side.
 

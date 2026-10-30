@@ -80,6 +80,12 @@ it afterwards rather than being treated as nodes in it:
   the canvas origin. If something else has since been placed there, it falls to
   the margin like any other note.
 
+When an AI assistant's edit moves the node or wire a note is anchored to, the
+note follows it: it goes back to the same position relative to its subject, or,
+if something else now stands there, to the nearest free side of the subject.
+A note that cannot get closer to its subject without overlapping something
+stays where it is.
+
 Notes are always placed at their real size, they never push graph nodes out of
 the way, and they never overlap a node or each other. A note anchored deep
 inside a wide graph can end up with a long leader line to the margin; anchor it

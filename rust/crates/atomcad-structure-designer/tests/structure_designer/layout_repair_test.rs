@@ -317,13 +317,15 @@ fn a_comment_left_behind_by_a_shift_is_pulled_back_to_its_exact_offset() {
 }
 
 /// The same drift, with the restored spot no longer free: a comment pushed
-/// aside by a block cannot go back, because the block is now standing where it
-/// used to be. All-or-nothing — it stays where the cascade left it rather than
-/// moving part of the way.
+/// aside by a block cannot go back to its exact offset, because the block is
+/// now standing there. It returns beside its anchor instead, on the free side
+/// nearest the one it was on — here below `a`, the block having taken its
+/// right — rather than staying where the cascade shoved it.
 #[test]
-fn a_comment_whose_original_spot_is_taken_stays_where_the_cascade_left_it() {
+fn a_comment_whose_original_spot_is_taken_returns_to_a_free_side_of_its_anchor() {
     let mut fixture = Fixture::new(&format!(
-        "a = int {{ value: 1 }}\n{}",
+        "a = int {{ value: 1 }}
+{}",
         comment("note", DVec2::new(200.0, 300.0), Some("a"))
     ));
     fixture.place(&["a"], 100.0, 100.0);
@@ -332,12 +334,22 @@ fn a_comment_whose_original_spot_is_taken_stays_where_the_cascade_left_it() {
     fixture.edit(&expr("b", "a"));
     let outcome = fixture.run();
 
-    let (note, b) = (outcome.rect(&["note"]), outcome.rect(&["b"]));
+    let (a, note, b) = (
+        outcome.rect(&["a"]),
+        outcome.rect(&["note"]),
+        outcome.rect(&["b"]),
+    );
     assert_eq!(
         note.position,
-        DVec2::new(310.0, b.position.y + b.size.y + VERTICAL_GAP),
-        "pushed by the minimum that clears the block, and left there: the \
-         restored position is occupied by that very block"
+        DVec2::new(
+            a.position.x + a.size.x / 2.0 - note.size.x / 2.0,
+            a.position.y + a.size.y + ANCHOR_GAP
+        ),
+        "below its anchor, at the gap the layout uses"
+    );
+    assert!(
+        note.position.x + note.size.x <= b.position.x || note.position.y >= b.position.y + b.size.y,
+        "clear of the block that took its old spot"
     );
 }
 
@@ -367,6 +379,141 @@ fn a_comment_that_drifted_closer_is_left_alone() {
         DVec2::new(310.0, -600.0),
         "the anchor itself was never in the way"
     );
+}
+
+/// `s -> k` and a comment on `k`, `ANCHOR_GAP` right of it — the distance the
+/// layout itself puts a comment beside its anchor. Returns the fixture and the
+/// comment's offset from `k`.
+fn comment_beside_k(on: &str) -> (Fixture, DVec2) {
+    let mut fixture = Fixture::new(&format!(
+        "s = int {{ value: 1 }}
+{}{}",
+        expr("k", "s"),
+        comment("note", DVec2::new(200.0, 100.0), Some(on))
+    ));
+    fixture.place(&["s"], 0.0, 400.0);
+    fixture.place(&["k"], 300.0, 400.0);
+    let k = fixture.was(&["k"]);
+    fixture.place(&["note"], k.position.x + k.size.x + ANCHOR_GAP, 400.0);
+    let offset = fixture.was(&["note"]).position - fixture.was(&["k"]).position;
+    (fixture, offset)
+}
+
+/// An anchor a statement moved, with its comment beside it. The anchor sits
+/// closer to the restored spot than the ordinary clearance, and used to count
+/// as an obstacle there, so the comment never came back.
+#[test]
+fn a_comment_beside_its_anchor_follows_a_placed_anchor() {
+    let (mut fixture, offset) = comment_beside_k("k");
+
+    fixture.edit("place k by (0, 400)");
+    let outcome = fixture.run();
+
+    let (k, note) = (outcome.rect(&["k"]), outcome.rect(&["note"]));
+    assert_eq!(k.position, DVec2::new(300.0, 800.0));
+    assert_eq!(note.position - k.position, offset, "the comment followed");
+}
+
+/// A group moved together: every member kept its offset to the anchor, so
+/// none of them is in the way of the comment's old relation to them — even
+/// one the comment sits closer to than the comment clearance.
+#[test]
+fn a_comment_follows_a_group_its_anchor_moved_with() {
+    let (mut fixture, offset) = comment_beside_k("k");
+    fixture.edit(
+        "j = int { value: 3 }
+",
+    );
+    let note = fixture.was(&["note"]);
+    // `j` right under the comment, 10 px below it.
+    fixture.place(
+        &["j"],
+        note.position.x,
+        note.position.y + note.size.y + 10.0,
+    );
+
+    fixture.edit("place [k, j] by (0, 400)");
+    let outcome = fixture.run();
+
+    let (k, note) = (outcome.rect(&["k"]), outcome.rect(&["note"]));
+    assert_eq!(k.position, DVec2::new(300.0, 800.0));
+    assert_eq!(note.position - k.position, offset, "the comment followed");
+}
+
+/// A wire anchor: both ends moved together, so the wire and the comment
+/// beside its midpoint move as one.
+#[test]
+fn a_comment_on_a_wire_follows_the_wire() {
+    let (mut fixture, _) = comment_beside_k("s -> k.x");
+    let (s, k, note) = (
+        fixture.was(&["s"]).position,
+        fixture.was(&["k"]).position,
+        fixture.was(&["note"]).position,
+    );
+
+    fixture.edit("place [s, k] by (0, 400)");
+    let outcome = fixture.run();
+
+    let shift = DVec2::new(0.0, 400.0);
+    assert_eq!(outcome.rect(&["s"]).position, s + shift);
+    assert_eq!(outcome.rect(&["k"]).position, k + shift);
+    assert_eq!(outcome.rect(&["note"]).position, note + shift);
+}
+
+/// The exact offset is taken by another node, so the comment returns to the
+/// free spot beside its anchor nearest the side it was on.
+#[test]
+fn a_comment_whose_exact_spot_is_taken_returns_beside_its_anchor() {
+    let (mut fixture, offset) = comment_beside_k("k");
+    fixture.edit(
+        "blocker = int { value: 3 }
+",
+    );
+    // Exactly where the comment would land after `k` moves.
+    let k = fixture.was(&["k"]);
+    let target = k.position + DVec2::new(0.0, 400.0) + offset;
+    fixture.place(&["blocker"], target.x, target.y);
+
+    fixture.edit("place k by (0, 400)");
+    let outcome = fixture.run();
+
+    let (k, note, blocker) = (
+        outcome.rect(&["k"]),
+        outcome.rect(&["note"]),
+        outcome.rect(&["blocker"]),
+    );
+    let beside = [
+        DVec2::new(
+            k.position.x + k.size.x / 2.0 - note.size.x / 2.0,
+            k.position.y - ANCHOR_GAP - note.size.y,
+        ),
+        DVec2::new(
+            k.position.x + k.size.x / 2.0 - note.size.x / 2.0,
+            k.position.y + k.size.y + ANCHOR_GAP,
+        ),
+        DVec2::new(
+            k.position.x + k.size.x + ANCHOR_GAP,
+            k.position.y + k.size.y / 2.0 - note.size.y / 2.0,
+        ),
+        DVec2::new(
+            k.position.x - ANCHOR_GAP - note.size.x,
+            k.position.y + k.size.y / 2.0 - note.size.y / 2.0,
+        ),
+    ];
+    assert!(
+        beside.contains(&note.position),
+        "the comment is beside its anchor: {:?}",
+        note.position
+    );
+    let apart = |(ap, asz): (DVec2, DVec2), (bp, bsz): (DVec2, DVec2)| {
+        ap.x + asz.x <= bp.x || bp.x + bsz.x <= ap.x || ap.y + asz.y <= bp.y || bp.y + bsz.y <= ap.y
+    };
+    let note_box = (note.position, note.size);
+    assert!(
+        apart(note_box, (blocker.position, blocker.size)),
+        "and clear of the blocker"
+    );
+    assert!(apart(note_box, (k.position, k.size)), "and of the anchor");
 }
 
 /// An anchor the edit removed resolves to nothing, and a comment with nothing

@@ -316,11 +316,13 @@ fn a_comment_too_tall_to_slide_past_is_pushed_by_the_minimum() {
     // A 200x300 note spanning more than the slide window: there is no free `y`
     // to slide to, so Step 5b places the block at its target and cascades. A
     // comment is an ordinary node on this path (D9) — it is pushed, at its real
-    // size, by exactly the least that clears the block.
+    // size, by exactly the least that clears the block. Unanchored: an
+    // anchored one is then pulled back beside its anchor by Step 8
+    // (`layout_repair_test`), which is not what this test is about.
     let mut fixture = Fixture::new(
         r#"
 a = int { value: 1 }
-note = Comment { label: "", text: "in the way", width: 200, height: 300, on: a }
+note = Comment { label: "", text: "in the way", width: 200, height: 300 }
 "#,
     );
     fixture.place(&["a"], 100.0, 100.0);

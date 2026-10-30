@@ -77,6 +77,11 @@ pub const SLIDE_WINDOW: f64 = 2.0 * TYPICAL_NODE_HEIGHT;
 /// window is full too, the cascade runs and the hand-placed nodes move.
 const HAND_MOVED_SLIDE_EXTENSION: f64 = 2.0;
 
+/// How far a node's offset to a comment's anchor may change and still count as
+/// having moved rigidly with it (Step 8). Positions are whole pixels in
+/// practice; this only absorbs float noise, it is not a tuning surface.
+const RIGID_TOLERANCE: f64 = 0.5;
+
 // ---------------------------------------------------------------------------
 // Step 2 — repair grown nodes
 // ---------------------------------------------------------------------------
@@ -1350,18 +1355,29 @@ fn place_new_comments(
 /// For each anchored comment that was already there before the edit, ascending
 /// id: if its distance to its anchor *grew* during this pass, put it back at
 /// its exact original offset — `anchor_after + (comment_before −
-/// anchor_before)` — provided that spot is collision-free. Otherwise leave it
-/// where it is.
+/// anchor_before)` — provided that spot is free. Failing that, take the free
+/// spot beside the anchor ([`surrounding_candidates`], Step 7's four) nearest
+/// that offset, if it is closer to the anchor than the comment is now.
+/// Otherwise leave it where it is.
 ///
-/// All-or-nothing, and with no constant of its own. The motivating case is a
-/// comment sitting just left of a shift line whose anchor was carried right:
-/// the comment stayed, the anchor moved, and the leader line grew for no
-/// reason. Three things this can never do: move a comment *away* from its
-/// anchor (the distance test), create an overlap (the collision test), or act
-/// on an anchor it cannot resolve on both sides (a target the edit removed, or
-/// one the edit added, whose "before" position is the throwaway the creation
-/// placer gave it). A pinned comment — one a statement placed or measured
-/// against — is never pulled back (D6).
+/// "Free" is tested at [`COMMENT_CLEARANCE`], as Step 7 does, and **ignores
+/// every node that moved rigidly with the anchor** (the same offset to it
+/// before and after): the anchor itself, the rest of a group a statement moved
+/// together, a wire anchor's ends. The restored offset puts back the relation
+/// the comment had to exactly those nodes, so none of them can object to it.
+/// Tested at the ordinary clearance with the anchor as an obstacle, a comment
+/// drawn beside its node (24 px for the layout's own placement, often less by
+/// hand) could never return to it, which is what made comments stay behind
+/// when their anchor was placed.
+///
+/// The motivating cases are a comment left of a shift line whose anchor was
+/// carried right, and an anchor a `place` statement moved. Three things this
+/// can never do: move a comment *away* from its anchor (the distance tests),
+/// create an overlap with a node it was not already beside (the collision
+/// test), or act on an anchor it cannot resolve on both sides (a target the
+/// edit removed, or one the edit added, whose "before" position is the
+/// throwaway the creation placer gave it). A pinned comment — one a statement
+/// placed or measured against — is never pulled back (D6).
 #[allow(clippy::too_many_arguments)]
 fn restore_drifted_comments(
     scope: &mut NodeNetwork,
@@ -1405,21 +1421,54 @@ fn restore_drifted_comments(
             continue;
         };
 
-        let drifted = (comment_after - anchor_after.pos).length()
-            > (comment_before - anchor_before.pos).length();
+        let distance_now = (comment_after - anchor_after.pos).length();
+        let drifted = distance_now > (comment_before - anchor_before.pos).length();
         if !drifted {
             continue;
         }
 
-        let target = anchor_after.pos + (comment_before - anchor_before.pos);
-        if frame.is_some() && (target.x < 0.0 || target.y < 0.0) {
+        // The nodes that kept their offset to the anchor: the anchor itself
+        // (offset zero both times), and whatever moved along with it.
+        let rigid: HashSet<u64> = was
+            .iter()
+            .filter(|&(&other, &other_before)| {
+                other != id
+                    && now.get(&other).is_some_and(|&other_after| {
+                        ((other_after - anchor_after.pos) - (other_before - anchor_before.pos))
+                            .length()
+                            < RIGID_TOLERANCE
+                    })
+            })
+            .map(|(&other, _)| other)
+            .collect();
+        let inside_frame = |pos: DVec2| frame.is_none() || (pos.x >= 0.0 && pos.y >= 0.0);
+        let free = |pos: DVec2, ignore: &HashSet<u64>| {
+            inside_frame(pos)
+                && obstacles_at_except(scope, sizes, pos, size, COMMENT_CLEARANCE, Some(id))
+                    .iter()
+                    .all(|other| ignore.contains(other))
+        };
+
+        let exact = anchor_after.pos + (comment_before - anchor_before.pos);
+        let destination = if free(exact, &rigid) {
+            Some(exact)
+        } else {
+            // Beside the anchor, on the side nearest the one the comment was
+            // on. The anchor is an obstacle here like any other node: these
+            // spots are not a relation the comment had before.
+            let mut beside: Vec<DVec2> = surrounding_candidates(anchor_after, size)
+                .into_iter()
+                .filter(|&pos| (pos - anchor_after.pos).length() < distance_now)
+                .filter(|&pos| free(pos, &HashSet::new()))
+                .collect();
+            beside.sort_by(|a, b| (*a - exact).length().total_cmp(&(*b - exact).length()));
+            beside.first().copied()
+        };
+        let Some(destination) = destination else {
             continue;
-        }
-        if !obstacles_at_except(scope, sizes, target, size, VERTICAL_GAP, Some(id)).is_empty() {
-            continue;
-        }
+        };
         if let Some(node) = scope.nodes.get_mut(&id) {
-            node.position = target;
+            node.position = destination;
             causes.record([id], MoveCause::Auto, "returned beside its anchor");
         }
     }
