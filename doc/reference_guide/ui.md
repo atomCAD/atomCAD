@@ -1266,7 +1266,7 @@ How the [3D viewport](#3d-viewport) is drawn. *Anti-aliasing* and *Full display 
 
 | Setting | Description |
 |---------|-------------|
-| Auto-layout algorithm | *Topological Grid* or *Sugiyama*. Controls which algorithm is used by *Edit > Auto-Layout Network*, and which one arranges the nodes a new edit adds. |
+| Auto-layout algorithm | *Topological Grid* or *Sugiyama*. Controls which algorithm is used by *Edit > Auto-Layout Network*, and which one arranges the nodes a new edit adds. *Sugiyama* (also what *Arrange selection* uses) puts a value or parameter in the column just before the node it feeds, not at the far left, so its wire stays short and does not cross the rest of the drawing. *Topological Grid* puts every node with no inputs in the leftmost column. |
 | Auto-Layout keeps manually placed nodes in place | When enabled, a full *Auto-Layout Network* leaves every node you have placed by hand — by dragging it or with an *Arrange* command — exactly where it is and arranges the rest around them. Off by default: a reflow you asked for is normally meant to be total. |
 | Snap while dragging | When enabled (the default), a node you drag snaps to straight wires, aligned edges and even gaps, with guides showing why. See [Snapping guides](#navigating-in-the-node-network-editor-panel). Holding **Alt** skips snapping for one drag. |
 

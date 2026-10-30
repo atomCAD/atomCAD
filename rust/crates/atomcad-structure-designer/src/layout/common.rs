@@ -144,6 +144,89 @@ pub fn compute_node_depths_within(
     depths
 }
 
+/// Pull nodes rightward, toward their consumers, where that shortens the
+/// drawing's wires: the second half of layer assignment.
+///
+/// [`compute_node_depths_within`] places every node as far *left* as it can
+/// go, so a source sits in column 0 whatever it feeds. That is right for the
+/// inputs at the head of a pipeline and wrong for a constant or a parameter
+/// feeding the last node of a long chain: its wire then spans the whole
+/// drawing, crossing everything between (a `bool` into `materialize`, a
+/// `parameter` into the final node).
+///
+/// Visiting nodes from the deepest down, each node with consumers in `ids` is
+/// moved to one column before its nearest consumer, **if** it has at least as
+/// many wires out (to `ids`) as in: moving it right by `k` columns shortens
+/// each outgoing wire by `k` and lengthens each incoming one by `k`, so the
+/// total span does not grow. Sources always qualify; a node gathering several
+/// inputs into one consumer stays where it is. Ties move, so a
+/// `value → parameter` pair travels together: the parameter moves first,
+/// which then gives its source a reason to.
+///
+/// A node only ever moves right and never past a consumer (consumers are
+/// visited first), so the result is still a valid layering. Nodes without a
+/// consumer in `ids` — the sinks — keep their depth. Only wires between nodes
+/// of `ids` in this scope count, as in [`compute_node_depths_within`].
+pub fn pull_toward_consumers(
+    network: &NodeNetwork,
+    ids: &HashSet<u64>,
+    depths: &mut HashMap<u64, usize>,
+) {
+    // One entry per wire: two wires from `a` into two pins of `b` are two
+    // spans on the canvas.
+    let mut consumers: HashMap<u64, Vec<u64>> = HashMap::new();
+    let mut in_wires: HashMap<u64, usize> = HashMap::new();
+    let mut sorted: Vec<u64> = ids.iter().copied().collect();
+    sorted.sort_unstable();
+    for &node_id in &sorted {
+        let Some(node) = network.nodes.get(&node_id) else {
+            continue;
+        };
+        for wire in node
+            .arguments
+            .iter()
+            .flat_map(|arg| arg.incoming_wires.iter())
+        {
+            if wire.source_scope_depth != 0
+                || wire.source_node_id == node_id
+                || !ids.contains(&wire.source_node_id)
+            {
+                continue;
+            }
+            consumers
+                .entry(wire.source_node_id)
+                .or_default()
+                .push(node_id);
+            *in_wires.entry(node_id).or_default() += 1;
+        }
+    }
+
+    // Deepest first, ties by ascending id (D7): every consumer has its final
+    // depth by the time its producer is visited.
+    let mut order: Vec<u64> = sorted
+        .into_iter()
+        .filter(|id| depths.contains_key(id))
+        .collect();
+    order.sort_by(|a, b| depths[b].cmp(&depths[a]).then(a.cmp(b)));
+    for node_id in order {
+        let Some(out) = consumers.get(&node_id) else {
+            continue;
+        };
+        if out.len() < in_wires.get(&node_id).copied().unwrap_or(0) {
+            continue;
+        }
+        let Some(nearest) = out.iter().filter_map(|c| depths.get(c)).copied().min() else {
+            continue;
+        };
+        let current = depths[&node_id];
+        // Only rightward: on a wire cycle a consumer can sit left of its
+        // producer, and the cycle break's layering is left alone.
+        if nearest > current + 1 {
+            depths.insert(node_id, nearest - 1);
+        }
+    }
+}
+
 /// Get all node IDs that feed into the given node (direct inputs).
 ///
 /// # Arguments

@@ -8,8 +8,11 @@
 //! - Edge cases: empty networks, single nodes, long edges
 
 use glam::DVec2;
+use std::collections::{HashMap, HashSet};
 
-use atomcad_structure_designer::layout::common::LayoutAlgorithm;
+use atomcad_structure_designer::layout::common::{
+    LayoutAlgorithm, compute_node_depths, pull_toward_consumers,
+};
 use atomcad_structure_designer::layout::compute_layout;
 use atomcad_structure_designer::layout::size;
 use atomcad_structure_designer::layout::sugiyama::{LayerNode, create_layered_graph_for_testing};
@@ -120,13 +123,15 @@ fn test_dummy_nodes_for_long_edges() {
     // This requires a chain to push the target node to a higher layer
     //
     // Structure:
-    //   f1 â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-    //                           â–¼
-    //   f2 -> sphere1 -> sphere2
+    //   f1 ──────────┬────────────┐
+    //                ▼            ▼
+    //   f2 -> sphere1   ->   sphere2
     //
     // f1 is at depth 0, f2 is at depth 0
     // sphere1 is at depth 1, sphere2 is at depth 2
-    // f1 -> sphere2 is a long edge spanning 2 layers, needs 1 dummy node
+    // f1 -> sphere2 is a long edge spanning 2 layers, needs 1 dummy node.
+    // f1 also feeds sphere1, which keeps it in layer 0: fed only into
+    // sphere2, it would be pulled next to it and the edge would be short.
     let mut designer = setup_designer_with_network("test_network");
     let f1 = designer.add_node("float", DVec2::ZERO);
     let f2 = designer.add_node("float", DVec2::new(0.0, 100.0));
@@ -139,6 +144,7 @@ fn test_dummy_nodes_for_long_edges() {
     // Long edge: f1 -> sphere2 (spans from layer 0 to layer 2)
     // sphere nodes have 3 arguments, so we connect to argument 1 or 2
     designer.connect_nodes(f1, 0, sphere2_id, 1);
+    designer.connect_nodes(f1, 0, sphere1_id, 1);
 
     let network = designer
         .node_type_registry
@@ -791,4 +797,129 @@ fn test_layer_node_equality() {
     assert_eq!(dummy1, dummy2);
     assert_ne!(dummy1, dummy3);
     assert_ne!(real1, dummy1);
+}
+
+// =============================================================================
+// Layer assignment: pulling nodes toward their consumers
+// =============================================================================
+
+/// A chain `head -> c1 -> c2 -> c3`, every link into pin 0, in a fresh
+/// designer. Returns the designer and the chain's ids.
+fn chain_designer() -> (StructureDesigner, [u64; 4]) {
+    let mut designer = setup_designer_with_network("test_network");
+    let head = designer.add_node("float", DVec2::ZERO);
+    let c1 = designer.add_node("sphere", DVec2::new(100.0, 0.0));
+    let c2 = designer.add_node("sphere", DVec2::new(200.0, 0.0));
+    let c3 = designer.add_node("sphere", DVec2::new(300.0, 0.0));
+    designer.connect_nodes(head, 0, c1, 0);
+    designer.connect_nodes(c1, 0, c2, 0);
+    designer.connect_nodes(c2, 0, c3, 0);
+    (designer, [head, c1, c2, c3])
+}
+
+/// The left-packed depths and the pulled ones, over the whole network.
+fn depths_before_and_after(
+    designer: &StructureDesigner,
+) -> (HashMap<u64, usize>, HashMap<u64, usize>) {
+    let network = designer
+        .node_type_registry
+        .node_networks
+        .get("test_network")
+        .unwrap();
+    let before = compute_node_depths(network);
+    let all: HashSet<u64> = network.nodes.keys().copied().collect();
+    let mut after = before.clone();
+    pull_toward_consumers(network, &all, &mut after);
+    (before, after)
+}
+
+#[test]
+fn a_source_feeding_the_end_of_a_chain_sits_next_to_it() {
+    let (mut designer, [_, _, _, c3]) = chain_designer();
+    let late = designer.add_node("float", DVec2::new(0.0, 200.0));
+    designer.connect_nodes(late, 0, c3, 1);
+
+    let (before, after) = depths_before_and_after(&designer);
+    assert_eq!(before[&late], 0, "left-packed, a source is in column 0");
+    assert_eq!(before[&c3], 3);
+    assert_eq!(after[&late], 2, "pulled to the column before its consumer");
+    assert_eq!(after[&c3], 3);
+}
+
+#[test]
+fn the_head_of_a_chain_stays_in_column_zero() {
+    let (designer, ids) = chain_designer();
+    let (before, after) = depths_before_and_after(&designer);
+    for id in ids {
+        assert_eq!(before[&id], after[&id], "a chain is already tight");
+    }
+}
+
+#[test]
+fn a_value_and_its_parameter_move_together() {
+    // late_value -> mid -> c3: `mid` has one wire in and one out, so moving
+    // it right costs nothing; then `late_value` follows it.
+    let (mut designer, [_, _, _, c3]) = chain_designer();
+    let late_value = designer.add_node("float", DVec2::new(0.0, 200.0));
+    let mid = designer.add_node("sphere", DVec2::new(100.0, 200.0));
+    designer.connect_nodes(late_value, 0, mid, 0);
+    designer.connect_nodes(mid, 0, c3, 1);
+
+    let (before, after) = depths_before_and_after(&designer);
+    assert_eq!((before[&late_value], before[&mid]), (0, 1));
+    assert_eq!((after[&late_value], after[&mid]), (1, 2));
+}
+
+#[test]
+fn a_node_gathering_more_inputs_than_it_feeds_stays() {
+    // gather has two wires in and one out: pulling it right would lengthen
+    // two wires to shorten one.
+    let (mut designer, [_, _, _, c3]) = chain_designer();
+    let a = designer.add_node("float", DVec2::new(0.0, 200.0));
+    let b = designer.add_node("float", DVec2::new(0.0, 300.0));
+    let gather = designer.add_node("sphere", DVec2::new(100.0, 200.0));
+    designer.connect_nodes(a, 0, gather, 0);
+    designer.connect_nodes(b, 0, gather, 1);
+    designer.connect_nodes(gather, 0, c3, 1);
+
+    let (before, after) = depths_before_and_after(&designer);
+    assert_eq!(before[&gather], 1);
+    assert_eq!(after[&gather], 1);
+    assert_eq!((after[&a], after[&b]), (0, 0));
+}
+
+#[test]
+fn a_source_with_an_early_and_a_late_consumer_stays_by_the_early_one() {
+    let (mut designer, [_, c1, _, c3]) = chain_designer();
+    let shared = designer.add_node("float", DVec2::new(0.0, 200.0));
+    designer.connect_nodes(shared, 0, c1, 1);
+    designer.connect_nodes(shared, 0, c3, 1);
+
+    let (before, after) = depths_before_and_after(&designer);
+    assert_eq!(before[&c1], 1);
+    assert_eq!(after[&shared], 0, "nearest consumer is in column 1");
+}
+
+#[test]
+fn a_late_source_needs_no_dummy_nodes() {
+    // The end-to-end shape of the first test: the layered graph Sugiyama
+    // builds has no long edge left to route.
+    let (mut designer, [_, _, _, c3]) = chain_designer();
+    let late = designer.add_node("float", DVec2::new(0.0, 200.0));
+    designer.connect_nodes(late, 0, c3, 1);
+    let network = designer
+        .node_type_registry
+        .node_networks
+        .get("test_network")
+        .unwrap();
+
+    let graph = create_layered_graph_for_testing(network, &designer.node_type_registry);
+    let dummies = graph
+        .layers
+        .iter()
+        .flat_map(|layer| layer.nodes.iter())
+        .filter(|n| matches!(n, LayerNode::Dummy(_, _, _)))
+        .count();
+    assert_eq!(dummies, 0);
+    assert_eq!(graph.get_layer_index(LayerNode::Real(late)), Some(2));
 }

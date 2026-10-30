@@ -420,6 +420,20 @@ component discovery, dummy nodes, barycenters. Two consequences worth knowing:
   a body node can carry that same number without being connected to anything.
   Every graph walk here filters on depth for that reason.
 
+## Sugiyama layering: left-packed, then pulled toward consumers
+
+`compute_node_depths_within` packs every node as far left as it can go, so a
+constant feeding the last node of a chain sits in column 0 and its wire spans
+the drawing. Sugiyama therefore follows it with
+`common::pull_toward_consumers`, which moves a node to the column before its
+nearest consumer when it has at least as many wires out as in (the total wire
+span cannot grow). On demolib this cut crossings by ~37 % and wires behind
+nodes by ~78 %, with no network worse by more than one. Keep
+`compute_node_depths_within` itself left-packed: `TopologicalGrid`,
+`straighten`'s ordering and its own tests rely on that meaning. A test that
+needs a long edge must give its source an early consumer too, or the pull
+shortens the edge away.
+
 ## Sugiyama columns are per layer
 
 A column is as wide as its widest member plus `common::COLUMN_GAP`, not a fixed

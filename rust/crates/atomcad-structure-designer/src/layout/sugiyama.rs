@@ -30,7 +30,7 @@ use crate::node_type_registry::NodeTypeRegistry;
 use super::arrange::{input_pin_offset, output_pin_offset};
 use super::common::{
     COLUMN_GAP, START_X, START_Y, VERTICAL_GAP, compute_node_depths_within, graph_node_ids,
-    place_comments,
+    place_comments, pull_toward_consumers,
 };
 
 // Layout constants
@@ -360,8 +360,11 @@ fn layout_single_component(
     component_nodes: &HashSet<u64>,
     ids: &HashSet<u64>,
 ) -> HashMap<u64, DVec2> {
-    // Phase 1: Layer assignment (compute depths), over the subgraph alone
-    let depths = compute_node_depths_within(network, ids);
+    // Phase 1: Layer assignment (compute depths), over the subgraph alone:
+    // each node as far left as it can go, then pulled toward its consumers
+    // where that shortens the wires.
+    let mut depths = compute_node_depths_within(network, ids);
+    pull_toward_consumers(network, ids, &mut depths);
 
     // Filter to only nodes in this component
     let component_depths: HashMap<u64, usize> = depths
@@ -1211,7 +1214,8 @@ pub fn create_layered_graph_for_testing(
     registry: &NodeTypeRegistry,
 ) -> LayeredGraph {
     let all: HashSet<u64> = network.nodes.keys().copied().collect();
-    let depths = compute_node_depths_within(network, &all);
+    let mut depths = compute_node_depths_within(network, &all);
+    pull_toward_consumers(network, &all, &mut depths);
     let layers = group_by_depth(&depths);
     insert_dummy_nodes(&layers, network, registry, &depths)
 }
