@@ -529,6 +529,28 @@ place note by (0, 40)
 straighten [cut, fill]
 ```
 
+#### Working with the layout
+
+- **The drawing is part of the result.** The user reads and edits the network
+  on a canvas, so an avoidable crossing or a wire hidden behind a node is a
+  defect even when the network is correct. Get the network right first; spend
+  effort on the layout in proportion to how much you changed and how much the
+  user's arrangement matters.
+- **Findings are defects your edit created.** Fix them, or tell the user why
+  you did not.
+- **The user's nodes are theirs.** An untagged node was placed by a person.
+  Move it only when asked, or as the necessary side effect of making room, and
+  say so when you do.
+- **Positions computed in advance are usually wrong.** New nodes' sizes, pin
+  heights, and positions this same edit changes are known only when the
+  statements run. Relations are bound then; numbers you work out beforehand
+  are not.
+- **Tell the user what they would notice:** moves of their nodes, not where
+  your own went.
+- **An image costs far more context than the text read-out.** Take one when
+  the read-out and the findings do not settle a question, or when what you
+  need to judge is visual.
+
 #### Every edit is one undo step
 
 Each `edit` call is recorded in the app's undo stack as a single step labelled

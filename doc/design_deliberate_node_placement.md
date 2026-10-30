@@ -619,6 +619,18 @@ agents actually behave, that is left to the agent's judgement or to the
 principle the user states. Usage guidance is written from that evidence
 later, not guessed now.
 
+**Update (2026-10-30): usage guidance written.** The evidence came from a
+co-edit session rather than the planned replay: an agent asked to build a
+small network produced a correct one with an avoidable crossing and a wire
+behind a node, giving the drawing no thought. The skill's *Working with the
+layout* section now states the principles (the drawing is part of the result,
+findings are the edit's own defects, the user's nodes are theirs, positions
+computed in advance are usually wrong, report what the user would notice,
+images are expensive). It deliberately prescribes no thresholds or recipes:
+the agent has the concrete design in context and judges better from
+principles than from rules written without it. The same session added the
+`wire_over_node` and `crossing` findings and `query --layout --image`.
+
 - **Ask, Tell, Hear.** What `query --layout` returns, the statement forms
   and their meaning, and what each `layout` report field and cause means.
 - **Anchor to the drawing or absolutely, attach relatively.** Anchor the first
