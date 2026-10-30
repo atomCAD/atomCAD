@@ -11,6 +11,7 @@ use glam::DVec2;
 
 use atomcad_structure_designer::layout::common::LayoutAlgorithm;
 use atomcad_structure_designer::layout::compute_layout;
+use atomcad_structure_designer::layout::size;
 use atomcad_structure_designer::layout::sugiyama::{LayerNode, create_layered_graph_for_testing};
 use atomcad_structure_designer::node_layout;
 use atomcad_structure_designer::structure_designer::StructureDesigner;
@@ -306,6 +307,46 @@ fn test_crossing_minimization_orders_producers_by_pin() {
     assert!(
         cube_y < hole_y,
         "cube feeds diff.base, above diff.sub, so it must sit above hole: cube.y = {cube_y}, hole.y = {hole_y}"
+    );
+}
+
+/// A wire that skips a column must not run behind a node in that column.
+/// `cube -> diff.base` passes `hole`'s column; the curve stays between its two
+/// pin heights, so `hole` must lie wholly outside that band.
+#[test]
+fn test_long_wire_does_not_run_behind_a_node() {
+    let mut designer = setup_designer_with_network("test_network");
+    let radius = designer.add_node("int", DVec2::ZERO);
+    let cube = designer.add_node("cuboid", DVec2::ZERO);
+    let hole = designer.add_node("sphere", DVec2::ZERO);
+    let diff = designer.add_node("diff", DVec2::ZERO);
+
+    designer.connect_nodes(radius, 0, hole, 1); // sphere.radius
+    designer.connect_nodes(cube, 0, diff, 0); // diff.base
+    designer.connect_nodes(hole, 0, diff, 1); // diff.sub
+
+    let registry = &designer.node_type_registry;
+    let network = registry.node_networks.get("test_network").unwrap();
+    let positions = compute_layout(network, registry, LayoutAlgorithm::Sugiyama);
+
+    // Flutter's pin rows: 33 px to the first row, 22 px per row, pins at the
+    // middle of their row. Output pin 0 and input pin 0 sit at 44 px.
+    let first_pin = 33.0 + 0.5 * 22.0;
+    let wire_from = positions[&cube].y + first_pin;
+    let wire_to = positions[&diff].y + first_pin;
+    let (band_top, band_bottom) = (wire_from.min(wire_to), wire_from.max(wire_to));
+
+    let hole_top = positions[&hole].y;
+    let hole_bottom = hole_top + size::rendered_node_size(&network.nodes[&hole], registry).y;
+    assert!(
+        hole_bottom <= band_top || hole_top >= band_bottom,
+        "hole spans {hole_top}..{hole_bottom}, across the cube -> diff.base wire's band {band_top}..{band_bottom}"
+    );
+
+    // And the long wire's source is lined up with its target: the wire is level.
+    assert_eq!(
+        wire_from, wire_to,
+        "cube should align with diff, so the long wire runs level"
     );
 }
 

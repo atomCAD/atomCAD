@@ -27,6 +27,7 @@ use crate::node_layout;
 use crate::node_network::{NodeNetwork, SourcePin};
 use crate::node_type_registry::NodeTypeRegistry;
 
+use super::arrange::{input_pin_offset, output_pin_offset};
 use super::common::{
     COLUMN_GAP, START_X, START_Y, VERTICAL_GAP, compute_node_depths_within, graph_node_ids,
     place_comments,
@@ -783,9 +784,208 @@ fn assign_coordinates(
 
     // Second pass: vertical alignment refinement
     // Try to align nodes vertically with their primary connection
-    refine_vertical_alignment(&mut positions, graph, network, registry);
+    let long_wires = LongWires::collect(graph, network);
+    refine_vertical_alignment(&mut positions, graph, network, registry, &long_wires);
+
+    // Third pass: no node sits across a long wire's lane
+    clear_long_wire_lanes(&mut positions, graph, network, registry, &long_wires);
+
+    // A node pushed up past the start moves the whole drawing down instead
+    let min_y = positions.values().map(|p| p.y).fold(f64::MAX, f64::min);
+    if min_y < START_Y {
+        for pos in positions.values_mut() {
+            pos.y += START_Y - min_y;
+        }
+    }
 
     positions
+}
+
+/// One end of a wire: a node and the height of its pin below the node's top.
+#[derive(Debug, Clone, Copy)]
+struct PinEnd {
+    node: u64,
+    offset: f64,
+}
+
+/// How far a long wire may drop, from one pin height to the other, and still
+/// be given a clear lane ([`LongWires::lane`]).
+///
+/// Measured over demolib, wires drawn as Flutter draws them (old: 280 node
+/// overlaps in 44 of 66 networks): clearing only level wires removes 22 % of
+/// the overlaps for 0.4 % more height; 500 px removes 62 % and halves the
+/// networks affected for 9.5 %; clearing every wire removes 68 % for 21 %.
+const MAX_CLEARED_DROP: f64 = 500.0;
+
+/// The wires that span more than one layer, by the dummies they pass through.
+///
+/// The wire is drawn as one curve from its source pin to its target pin, not
+/// through its dummies, and that curve never leaves the vertical band between
+/// the two pin heights. A dummy's place in its layer's order says which side of
+/// the band each real node of that layer belongs on; crossing reduction chose
+/// it, and a node placed across the band hides the wire behind it.
+///
+/// Only a wire that drops at most [`MAX_CLEARED_DROP`] is given a clear lane.
+/// The refinement lines a long wire's ends up where it can; one it could not
+/// (a source that feeds several nodes at different heights) can have a band
+/// spanning the whole drawing, and clearing that costs far more height than
+/// it saves: `demo_rack_x` grew 1000 px to uncover 4 of its 75 overlapped
+/// wires.
+struct LongWires {
+    /// A dummy and every wire it stands for. Two wires between the same pair
+    /// of nodes share their dummies, so their bands are joined.
+    by_dummy: HashMap<LayerNode, Vec<(PinEnd, PinEnd)>>,
+}
+
+impl LongWires {
+    fn collect(graph: &LayeredGraph, network: &NodeNetwork) -> Self {
+        let layer_of: HashMap<u64, usize> = graph
+            .layers
+            .iter()
+            .enumerate()
+            .flat_map(|(idx, layer)| {
+                layer
+                    .nodes
+                    .iter()
+                    .filter_map(move |node| node.real_id().map(|id| (id, idx)))
+            })
+            .collect();
+
+        let mut by_dummy: HashMap<LayerNode, Vec<(PinEnd, PinEnd)>> = HashMap::new();
+        let mut target_ids: Vec<u64> = layer_of.keys().copied().collect();
+        target_ids.sort_unstable();
+        for target in target_ids {
+            let target_layer = layer_of[&target];
+            for (arg_index, arg) in network.nodes[&target].arguments.iter().enumerate() {
+                for wire in &arg.incoming_wires {
+                    let SourcePin::NodeOutput { pin_index } = wire.source_pin else {
+                        continue;
+                    };
+                    if wire.source_scope_depth != 0 {
+                        continue;
+                    }
+                    let source = wire.source_node_id;
+                    let Some(&source_layer) = layer_of.get(&source) else {
+                        continue;
+                    };
+                    if source_layer + 1 >= target_layer {
+                        continue;
+                    }
+                    let ends = (
+                        PinEnd {
+                            node: source,
+                            offset: output_pin_offset(network, source, pin_index),
+                        },
+                        PinEnd {
+                            node: target,
+                            offset: input_pin_offset(arg_index),
+                        },
+                    );
+                    for seg_idx in 0..target_layer - source_layer - 1 {
+                        by_dummy
+                            .entry(LayerNode::Dummy(source, target, seg_idx))
+                            .or_default()
+                            .push(ends);
+                    }
+                }
+            }
+        }
+        Self { by_dummy }
+    }
+
+    /// The lane `(top, bottom)` the wires of `dummy` run in, at the current
+    /// positions, if they drop at most [`MAX_CLEARED_DROP`]; `None` otherwise.
+    fn lane(&self, dummy: LayerNode, positions: &HashMap<u64, DVec2>) -> Option<(f64, f64)> {
+        let mut band: Option<(f64, f64)> = None;
+        for (from, to) in self.by_dummy.get(&dummy)? {
+            let (Some(a), Some(b)) = (positions.get(&from.node), positions.get(&to.node)) else {
+                continue;
+            };
+            let (ya, yb) = (a.y + from.offset, b.y + to.offset);
+            let (top, bottom) = (ya.min(yb), ya.max(yb));
+            band = Some(match band {
+                Some((t, b)) => (t.min(top), b.max(bottom)),
+                None => (top, bottom),
+            });
+        }
+        band.filter(|(top, bottom)| bottom - top <= MAX_CLEARED_DROP)
+    }
+}
+
+/// Push every real node off the lanes ([`LongWires::lane`]) of the long wires
+/// through its layer: a node after a wire's dummy in the layer order goes
+/// below the lane, one before it above, and nodes keep their order and gaps.
+/// Moving a node moves the lanes of its own wires, so the passes repeat until
+/// nothing moves.
+///
+/// Each layer is settled upward first, then downward; the downward pass runs
+/// last, so where both cannot hold, no two nodes overlap and the node clears
+/// the lane above it.
+fn clear_long_wire_lanes(
+    positions: &mut HashMap<u64, DVec2>,
+    graph: &LayeredGraph,
+    network: &NodeNetwork,
+    registry: &NodeTypeRegistry,
+    long_wires: &LongWires,
+) {
+    if long_wires.by_dummy.is_empty() {
+        return;
+    }
+    const MAX_ROUNDS: usize = 8;
+    for _ in 0..MAX_ROUNDS {
+        let mut moved = false;
+        for layer in &graph.layers {
+            let height = |id: u64| super::common::node_height(id, network, registry);
+
+            // Upward: a node's bottom stays above the lanes after it.
+            let mut ceiling = f64::MAX;
+            for &node in layer.nodes.iter().rev() {
+                match node {
+                    LayerNode::Dummy(_, _, _) => {
+                        if let Some((top, _)) = long_wires.lane(node, positions) {
+                            ceiling = ceiling.min(top - VERTICAL_GAP);
+                        }
+                    }
+                    LayerNode::Real(id) => {
+                        let Some(pos) = positions.get_mut(&id) else {
+                            continue;
+                        };
+                        let h = height(id);
+                        if pos.y + h > ceiling {
+                            pos.y = ceiling - h;
+                            moved = true;
+                        }
+                        ceiling = pos.y - VERTICAL_GAP;
+                    }
+                }
+            }
+
+            // Downward: a node's top stays below the lanes before it.
+            let mut floor = f64::MIN;
+            for &node in &layer.nodes {
+                match node {
+                    LayerNode::Dummy(_, _, _) => {
+                        if let Some((_, bottom)) = long_wires.lane(node, positions) {
+                            floor = floor.max(bottom + VERTICAL_GAP);
+                        }
+                    }
+                    LayerNode::Real(id) => {
+                        let Some(pos) = positions.get_mut(&id) else {
+                            continue;
+                        };
+                        if pos.y < floor {
+                            pos.y = floor;
+                            moved = true;
+                        }
+                        floor = pos.y + height(id) + VERTICAL_GAP;
+                    }
+                }
+            }
+        }
+        if !moved {
+            break;
+        }
+    }
 }
 
 /// The x coordinate of every layer, each column sized by its widest member.
@@ -847,110 +1047,143 @@ fn calculate_layer_height(
     total_height
 }
 
-/// Refine vertical alignment by trying to align nodes with their outputs.
+/// Refine vertical alignment by lining nodes up with their neighbours.
+///
+/// Three sweeps: right to left toward each node's primary output, left to
+/// right toward its primary input, and right to left again. A node moves to
+/// the nearest y its layer allows ([`free_range`]) rather than all or nothing,
+/// so one neighbour in the way costs part of the alignment, not all of it. The
+/// left-to-right sweep is what lines a long wire's target up with its source
+/// when the source could not move: the sweeps toward outputs only ever move
+/// sources.
 fn refine_vertical_alignment(
     positions: &mut HashMap<u64, DVec2>,
     graph: &LayeredGraph,
     network: &NodeNetwork,
     registry: &NodeTypeRegistry,
+    long_wires: &LongWires,
 ) {
-    // For each layer (right to left), try to align nodes with their outputs
-    for layer_idx in (0..graph.layers.len().saturating_sub(1)).rev() {
-        for &node in &graph.layers[layer_idx].nodes {
-            let LayerNode::Real(node_id) = node else {
-                continue;
-            };
+    let layer_count = graph.layers.len();
+    let toward_outputs: Vec<usize> = (0..layer_count.saturating_sub(1)).rev().collect();
+    let toward_inputs: Vec<usize> = (1..layer_count).collect();
+    let sweeps: [(&[usize], bool); 3] = [
+        (&toward_outputs, true),
+        (&toward_inputs, false),
+        (&toward_outputs, true),
+    ];
 
-            // Find the primary output (first connected node in next layer)
-            let primary_output = find_primary_output(node_id, graph, layer_idx);
+    for (layers, to_outputs) in sweeps {
+        for &layer_idx in layers {
+            for &node in &graph.layers[layer_idx].nodes {
+                let LayerNode::Real(node_id) = node else {
+                    continue;
+                };
+                let partner = if to_outputs {
+                    find_primary_output(node_id, graph, layer_idx)
+                } else {
+                    find_primary_input(node_id, graph)
+                };
+                let Some(target_y) = partner.and_then(|id| positions.get(&id)).map(|p| p.y) else {
+                    continue;
+                };
 
-            if let Some(output_id) = primary_output {
-                let output_pos = positions.get(&output_id).copied();
-                let node_pos = positions.get(&node_id).copied();
-
-                if let (Some(out_pos), Some(_cur_pos)) = (output_pos, node_pos) {
-                    // Try to move toward the output's Y position
-                    let target_y = out_pos.y;
-
-                    // Check if we can move without overlapping
-                    if can_move_to_y(
-                        node_id, target_y, layer_idx, positions, graph, network, registry,
-                    ) && let Some(pos) = positions.get_mut(&node_id)
-                    {
-                        pos.y = target_y;
-                    }
+                let height = super::common::node_height(node_id, network, registry);
+                let Some((lo, hi)) = free_range(
+                    node_id, height, layer_idx, positions, graph, network, registry, long_wires,
+                ) else {
+                    continue;
+                };
+                if let Some(pos) = positions.get_mut(&node_id) {
+                    pos.y = target_y.clamp(lo, hi);
                 }
             }
         }
     }
 }
 
-/// Find the primary output node for a given node (first connected node in next layer).
+/// Find the primary output node for a given node: the first real target in
+/// the next layer, else the real end of its first long wire, so that a long
+/// wire's source lines up with its target and the wire runs level.
 fn find_primary_output(node_id: u64, graph: &LayeredGraph, layer_idx: usize) -> Option<u64> {
-    let node = LayerNode::Real(node_id);
     let next_layer_idx = layer_idx + 1;
-
     if next_layer_idx >= graph.layers.len() {
         return None;
     }
 
-    // Get forward edges from this node
-    let edges = graph.forward_edges.get(&node)?;
+    let edges = graph.forward_edges.get(&LayerNode::Real(node_id))?;
 
-    // Find the first real node target in the next layer
-    for edge in edges {
-        let target = edge.to;
-        if let LayerNode::Real(target_id) = target {
-            // Check if this target is in the next layer
-            if graph.layers[next_layer_idx].nodes.contains(&target) {
-                return Some(target_id);
-            }
+    let direct = edges.iter().find_map(|edge| match edge.to {
+        LayerNode::Real(target_id) if graph.layers[next_layer_idx].nodes.contains(&edge.to) => {
+            Some(target_id)
         }
-    }
-
-    None
+        _ => None,
+    });
+    direct.or_else(|| {
+        edges.iter().find_map(|edge| match edge.to {
+            LayerNode::Dummy(_, target_id, _) => Some(target_id),
+            LayerNode::Real(_) => None,
+        })
+    })
 }
 
-/// Check if a node can move to a new Y position without overlapping other nodes.
-fn can_move_to_y(
+/// The primary input of a node: the real source of its lowest-indexed wired
+/// input, followed through dummies. Edges into a node are built in argument
+/// order (`insert_dummy_nodes`), so that is the first backward edge.
+fn find_primary_input(node_id: u64, graph: &LayeredGraph) -> Option<u64> {
+    let edge = graph
+        .backward_edges
+        .get(&LayerNode::Real(node_id))?
+        .first()?;
+    match edge.from {
+        LayerNode::Real(source_id) | LayerNode::Dummy(source_id, _, _) => Some(source_id),
+    }
+}
+
+/// The range `(lo, hi)` a node's top may take without leaving its place: below
+/// every node before it in its layer and above every node after it, gaps
+/// kept (a move past one would undo crossing reduction), and on its side of
+/// the lane of every long wire through the layer. `None` when the range is
+/// empty, i.e. the layer is already too tight to move the node at all.
+#[allow(clippy::too_many_arguments)]
+fn free_range(
     node_id: u64,
-    target_y: f64,
+    height: f64,
     layer_idx: usize,
     positions: &HashMap<u64, DVec2>,
     graph: &LayeredGraph,
     network: &NodeNetwork,
     registry: &NodeTypeRegistry,
-) -> bool {
-    let proposed_pos = DVec2::new(
-        positions.get(&node_id).map(|p| p.x).unwrap_or(START_X),
-        target_y,
-    );
-    let proposed_size = super::common::node_size(node_id, network, registry);
-
-    // Check against other nodes in the same layer
+    long_wires: &LongWires,
+) -> Option<(f64, f64)> {
+    let (mut lo, mut hi) = (f64::MIN, f64::MAX);
+    let mut before = true;
     for &other in &graph.layers[layer_idx].nodes {
-        if let LayerNode::Real(other_id) = other {
-            if other_id == node_id {
+        let (top, bottom) = match other {
+            LayerNode::Real(other_id) if other_id == node_id => {
+                before = false;
                 continue;
             }
-
-            if let Some(&other_pos) = positions.get(&other_id) {
-                let other_size = super::common::node_size(other_id, network, registry);
-
-                if node_layout::nodes_overlap(
-                    proposed_pos,
-                    proposed_size,
-                    other_pos,
-                    other_size,
-                    VERTICAL_GAP,
-                ) {
-                    return false;
-                }
+            LayerNode::Real(other_id) => {
+                let Some(pos) = positions.get(&other_id) else {
+                    continue;
+                };
+                (
+                    pos.y,
+                    pos.y + super::common::node_height(other_id, network, registry),
+                )
             }
+            LayerNode::Dummy(_, _, _) => match long_wires.lane(other, positions) {
+                Some(band) => band,
+                None => continue,
+            },
+        };
+        if before {
+            lo = lo.max(bottom + VERTICAL_GAP);
+        } else {
+            hi = hi.min(top - VERTICAL_GAP - height);
         }
     }
-
-    true
+    (lo <= hi).then_some((lo, hi))
 }
 
 // =============================================================================

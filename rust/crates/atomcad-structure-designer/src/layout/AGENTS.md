@@ -426,6 +426,19 @@ middle), and both the barycenters and `count_crossings` measure a wire end as
 `diff.base` and `diff.sub` tie at zero crossings and the drawn order is an
 accident. A new edge must carry real ports, not a constant.
 
+**Coordinate assignment keeps the order crossing reduction chose.** The
+refinement moves each node to the nearest y inside its free range (its
+neighbours in layer order, gaps kept), in three sweeps: toward outputs, toward
+inputs, toward outputs. A long wire is drawn as one curve between its two pins,
+not through its dummies, so a dummy says which side of the wire each node of
+its layer belongs on: `clear_long_wire_lanes` pushes nodes off a long wire's
+lane, but only for wires that drop at most `MAX_CLEARED_DROP`. Clearing steep
+fan-out wires too costs about twice the height for few extra uncovered wires
+(the measurements are on the constant). Judge a change here by wires drawn as
+Flutter draws them (a cubic with control points 50 px out), not by the
+rectangle between the pin heights: that rectangle overstates a steep wire's
+footprint and favours clearing everything.
+
 `find_connected_components` seeds its BFS from **sorted** ids. The size sort
 after it is stable, so `HashMap` order used to decide how two equal-size
 components stacked, per process. Any new iteration over nodes or scopes must be
