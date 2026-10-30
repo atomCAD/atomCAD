@@ -1396,11 +1396,15 @@ fn wire__crate__api__structure_designer__ai_assistant_api__ai_query_layout_impl(
             let api_scope = <String>::sse_decode(&mut deserializer);
             let api_nodes = <String>::sse_decode(&mut deserializer);
             let api_bbox = <String>::sse_decode(&mut deserializer);
+            let api_findings = <bool>::sse_decode(&mut deserializer);
             deserializer.end();
             transform_result_sse::<_, ()>((move || {
                 let output_ok = Result::<_, ()>::Ok(
                     crate::api::structure_designer::ai_assistant_api::ai_query_layout(
-                        api_scope, api_nodes, api_bbox,
+                        api_scope,
+                        api_nodes,
+                        api_bbox,
+                        api_findings,
                     ),
                 )?;
                 Ok(output_ok)

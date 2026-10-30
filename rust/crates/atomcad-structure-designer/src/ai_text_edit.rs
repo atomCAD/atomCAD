@@ -437,6 +437,21 @@ impl StructureDesigner {
                 None => (String::new(), LayoutOutcome::default()),
             };
         layout_outcome.attach_causes(&incremental.report);
+        // The drawing's problems before and after, in the scopes where an
+        // existing node moved: `findings` says only what this edit created, so
+        // without these a relayout that fixes five crossings and keeps one
+        // old one reads the same as one that fixes nothing. `original` is the
+        // pre-edit clone the rollback would have used.
+        if ran_layout
+            && let Some(network) = self.node_type_registry.node_networks.get(&network_name)
+        {
+            incremental.report.totals = layout::finding_totals(
+                &original,
+                network,
+                &self.node_type_registry,
+                &incremental.report.moved,
+            );
+        }
         // A script of layout statements alone changes no text, but it moves
         // nodes: that is a change, which needs its undo step and dirty flag.
         let layout_moved =
@@ -601,15 +616,36 @@ impl StructureDesigner {
     /// Read-only, like `query`: it reaches nothing but the network. A problem
     /// comes back as a `# Error: …` line, the way `query` reports one.
     pub fn query_active_layout(&self, scope: &str, nodes: &str, bbox: &str) -> String {
+        self.query_active_layout_with(scope, nodes, bbox, false)
+    }
+
+    /// [`query_active_layout`](Self::query_active_layout), with the
+    /// `# findings` section (`query --layout --findings`) appended when
+    /// `findings` is set: every layout problem the scope has now, not only
+    /// what an edit created ([`layout::findings_readout`]).
+    pub fn query_active_layout_with(
+        &self,
+        scope: &str,
+        nodes: &str,
+        bbox: &str,
+        findings: bool,
+    ) -> String {
         let Some(name) = self.active_node_network_name.as_deref() else {
             return "# No active node network\n".to_string();
         };
         let Some(network) = self.node_type_registry.node_networks.get(name) else {
             return format!("# Network '{}' not found\n", name);
         };
+        let registry = &self.node_type_registry;
         layout::parse_readout_args(scope, nodes, bbox)
             .and_then(|(scope, filter)| {
-                layout::layout_readout(network, &self.node_type_registry, name, &scope, &filter)
+                let mut out = layout::layout_readout(network, registry, name, &scope, &filter)?;
+                if findings {
+                    out.push_str(&layout::findings_readout(
+                        network, registry, name, &scope, &filter,
+                    )?);
+                }
+                Ok(out)
             })
             .unwrap_or_else(|message| format!("# Error: {}\n", message))
     }

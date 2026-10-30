@@ -112,6 +112,10 @@ Future<void> main(List<String> args) async {
     ..addOption('image',
         help: 'With --layout: also write the same area of the canvas to this '
             'PNG')
+    ..addFlag('findings',
+        defaultsTo: false,
+        help: 'With --layout: also list every overlap, wire behind a node, '
+            'crossing and backward wire the drawing has now')
     ..addOption('scale',
         help: 'With --image: image pixels per canvas pixel (default 1)')
     ..addFlag('rulers',
@@ -300,6 +304,7 @@ Future<void> main(List<String> args) async {
       final image = command['image'] as String?;
       final scale = command['scale'] as String?;
       final rulers = command['rulers'] as bool;
+      final findings = command['findings'] as bool;
       final problem = _layoutArgsProblem(
           nodes: nodes, box: box, image: image, scale: scale, rulers: rulers);
       if (problem != null) {
@@ -309,6 +314,7 @@ Future<void> main(List<String> args) async {
       // A filter or an image only means something to the layout read-out, so
       // it implies --layout rather than being silently ignored.
       if ((command['layout'] as bool) ||
+          findings ||
           nodes != null ||
           box != null ||
           scope != null ||
@@ -319,7 +325,8 @@ Future<void> main(List<String> args) async {
             scope: scope,
             image: image == null ? null : _resolveToAbsolutePath(image),
             scale: scale,
-            rulers: rulers);
+            rulers: rulers,
+            findings: findings);
       } else {
         await _runQuery(serverUrl);
       }
@@ -434,6 +441,7 @@ void _printUsage() {
   stdout.writeln('    [--nodes=a,b | --box=x0,y0,x1,y1] [--scope=m1/m2]');
   stdout.writeln('    [--image=<path.png> [--scale=2] [--no-rulers]]  '
       '...and a picture of the same area');
+  stdout.writeln('    [--findings]  ...and every layout problem it has now');
   stdout
       .writeln('  atomcad-cli edit --code="..."         Edit the node network');
   stdout.writeln(
@@ -556,6 +564,8 @@ void _printReplHelp() {
   stdout.writeln('                      Node boxes and inferred groups');
   stdout.writeln('    [--image=<path.png> [--scale=2] [--no-rulers]]');
   stdout.writeln('                      ...and a picture of the same area');
+  stdout
+      .writeln('    [--findings]      ...and every layout problem it has now');
   stdout.writeln('  edit                Enter edit mode (incremental)');
   stdout.writeln(
       '  edit --replace      Enter edit mode (replace entire network)');
@@ -751,10 +761,11 @@ String? _layoutArgsProblem(
 }
 
 /// The layout options of a REPL `query` line (`--layout`, `--nodes`, `--box`,
-/// `--scope`, `--image`, `--scale`, each value as `--opt=v` or `--opt v`, and
-/// `--no-rulers`), or null when the line asks for the plain network text. Any
-/// filter, `--image`, `--scale` or `--no-rulers` implies `--layout` (the last
-/// two are then refused without `--image`).
+/// `--scope`, `--image`, `--scale`, each value as `--opt=v` or `--opt v`,
+/// `--no-rulers` and `--findings`), or null when the line asks for the plain
+/// network text. Any filter, `--image`, `--scale`, `--no-rulers` or
+/// `--findings` implies `--layout` (`--scale` and `--no-rulers` are then
+/// refused without `--image`).
 Map<String, String?>? _replLayoutArgs(List<String> args) {
   final out = <String, String?>{};
   var layout = false;
@@ -766,6 +777,10 @@ Map<String, String?>? _replLayoutArgs(List<String> args) {
     }
     if (arg == '--no-rulers') {
       out['no-rulers'] = '';
+      continue;
+    }
+    if (arg == '--findings') {
+      out['findings'] = '';
       continue;
     }
     for (final name in const ['nodes', 'box', 'scope', 'image', 'scale']) {
@@ -790,7 +805,8 @@ Future<void> _runQueryLayout(String serverUrl,
     String? scope,
     String? image,
     String? scale,
-    bool rulers = true}) async {
+    bool rulers = true,
+    bool findings = false}) async {
   try {
     final params = <String, String>{
       if (nodes != null) 'nodes': nodes,
@@ -799,6 +815,7 @@ Future<void> _runQueryLayout(String serverUrl,
       if (image != null) 'image': image,
       if (scale != null) 'scale': scale,
       if (image != null && !rulers) 'rulers': 'false',
+      if (findings) 'findings': 'true',
     };
     final uri = Uri.parse('$serverUrl/layout')
         .replace(queryParameters: params.isEmpty ? null : params);
@@ -1591,7 +1608,8 @@ Future<void> _runRepl(String serverUrl) async {
               scope: layout['scope'],
               image: image == null ? null : _resolveToAbsolutePath(image),
               scale: layout['scale'],
-              rulers: rulers);
+              rulers: rulers,
+              findings: layout.containsKey('findings'));
         }
         break;
 

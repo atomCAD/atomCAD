@@ -16,7 +16,7 @@ use glam::DVec2;
 use serde_json::Value;
 
 use atomcad_structure_designer::layout::{
-    FindingKind, MoveCause, measure_scope, rendered_node_size, scope_findings,
+    FindingKind, MAX_LISTED_FINDINGS, MoveCause, measure_scope, rendered_node_size, scope_findings,
 };
 use atomcad_structure_designer::node_network::NodeNetwork;
 use atomcad_structure_designer::preferences::NodeDisplayPolicy;
@@ -595,4 +595,139 @@ fn wire_findings_are_fast_on_demolib() {
         slowest.1,
         slowest.0
     );
+}
+
+// ============================================================================
+// Absolute findings: `query --layout --findings` and the edit's `totals`
+// ============================================================================
+
+/// `a -> x` and `b -> y` with the destinations swapped: one crossing.
+fn crossed_pair(sd: &mut StructureDesigner) {
+    edit(
+        sd,
+        &format!(
+            "a = int {{ value: 1 }}\nb = int {{ value: 2 }}\nx = expr {{ x: a, {EXPR_X} }}\ny = expr {{ x: b, {EXPR_X} }}\n"
+        ),
+    );
+    place(sd, "a", 0.0, 0.0);
+    place(sd, "b", 0.0, 200.0);
+    place(sd, "x", 600.0, 200.0);
+    place(sd, "y", 600.0, 0.0);
+}
+
+#[test]
+fn the_findings_readout_lists_a_crossing_that_was_already_there() {
+    let mut sd = designer();
+    crossed_pair(&mut sd);
+
+    let out = sd.query_active_layout_with("", "", "", true);
+    assert!(
+        out.contains("# findings: 1 crossing, 0 wire_over_node, 0 overlap, 0 backward_wire\n"),
+        "{out}"
+    );
+    assert!(
+        out.contains("crossing  wire a -> x crosses wire b -> y\n"),
+        "{out}"
+    );
+    assert!(
+        !sd.query_active_layout("", "", "").contains("# findings"),
+        "only on request"
+    );
+}
+
+#[test]
+fn a_filter_narrows_the_findings_to_the_selected_nodes() {
+    let mut sd = designer();
+    crossed_pair(&mut sd);
+    edit(&mut sd, "z = int { value: 3 }\n");
+    place(&mut sd, "z", 0.0, 800.0);
+
+    let on_a = sd.query_active_layout_with("", "a", "", true);
+    assert!(
+        on_a.contains("# findings involving the listed nodes: 1 crossing, 0 wire_over_node, 0 overlap, 0 backward_wire; 1 in the whole scope\n"),
+        "{on_a}"
+    );
+    let on_z = sd.query_active_layout_with("", "z", "", true);
+    assert!(
+        on_z.contains("involving the listed nodes: 0 crossing"),
+        "{on_z}"
+    );
+    assert!(!on_z.contains("crosses"), "{on_z}");
+    let in_box = sd.query_active_layout_with("", "", "-50,750,300,1000", true);
+    assert!(
+        in_box.contains("involving the listed nodes: 0 crossing"),
+        "{in_box}"
+    );
+}
+
+#[test]
+fn a_long_findings_list_is_cut_and_says_how_many_more() {
+    // Seven sources feeding seven destinations in reverse order: every pair of
+    // wires crosses, 21 crossings.
+    let mut sd = designer();
+    let mut code = String::new();
+    for i in 0..7 {
+        code.push_str(&format!(
+            "s{i} = int {{ value: {i} }}\nd{i} = expr {{ x: s{i}, {EXPR_X} }}\n"
+        ));
+    }
+    edit(&mut sd, &code);
+    for i in 0..7 {
+        place(&mut sd, &format!("s{i}"), 0.0, 120.0 * i as f64);
+        place(&mut sd, &format!("d{i}"), 900.0, 120.0 * (6 - i) as f64);
+    }
+
+    let out = sd.query_active_layout_with("", "", "", true);
+    assert!(out.contains("# findings: 21 crossing,"), "{out}");
+    assert_eq!(
+        out.matches(" crosses ").count(),
+        MAX_LISTED_FINDINGS,
+        "{out}"
+    );
+    assert!(
+        out.contains("# 1 more not listed; narrow with --nodes or --box\n"),
+        "{out}"
+    );
+}
+
+/// The edit removes a crossing the drawing already had. `findings` has
+/// nothing to say (the edit created nothing); `totals` shows the improvement.
+#[test]
+fn totals_credit_an_edit_that_removes_an_old_crossing() {
+    let mut sd = designer();
+    crossed_pair(&mut sd);
+
+    let json = edit(&mut sd, "place y at (600, 400)");
+    assert_eq!(json["layout"]["findings"], serde_json::json!([]));
+    let totals = &json["layout"]["totals"];
+    assert_eq!(totals["crossing"], serde_json::json!([1, 0]), "{json}");
+    assert_eq!(totals["overlap"], serde_json::json!([0, 0]));
+    assert_eq!(totals["wire_over_node"], serde_json::json!([0, 0]));
+    assert_eq!(totals["backward_wire"], serde_json::json!([0, 0]));
+}
+
+/// The edit moves a node of an old crossing and keeps it. Not a finding — the
+/// edit did not create it — but `totals` shows it is still there.
+#[test]
+fn totals_show_an_old_crossing_an_edit_kept() {
+    let mut sd = designer();
+    crossed_pair(&mut sd);
+
+    let json = edit(&mut sd, "place b by (0, 10)");
+    assert_eq!(json["layout"]["findings"], serde_json::json!([]));
+    assert_eq!(
+        json["layout"]["totals"]["crossing"],
+        serde_json::json!([1, 1]),
+        "{json}"
+    );
+}
+
+/// No existing node moved: no comparison to make.
+#[test]
+fn an_edit_that_moves_nothing_has_no_totals() {
+    let mut sd = designer();
+    crossed_pair(&mut sd);
+
+    let json = edit(&mut sd, "z = int { value: 3 }\n");
+    assert!(json["layout"].get("totals").is_none(), "{json}");
 }

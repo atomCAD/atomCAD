@@ -260,7 +260,10 @@ abstract class RustLibApi extends BaseApi {
       {String? category, required bool verbose});
 
   String crateApiStructureDesignerAiAssistantApiAiQueryLayout(
-      {required String scope, required String nodes, required String bbox});
+      {required String scope,
+      required String nodes,
+      required String bbox,
+      required bool findings});
 
   String crateApiStructureDesignerAiAssistantApiAiQueryNetwork();
 
@@ -3667,13 +3670,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   @override
   String crateApiStructureDesignerAiAssistantApiAiQueryLayout(
-      {required String scope, required String nodes, required String bbox}) {
+      {required String scope,
+      required String nodes,
+      required String bbox,
+      required bool findings}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_String(scope, serializer);
         sse_encode_String(nodes, serializer);
         sse_encode_String(bbox, serializer);
+        sse_encode_bool(findings, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 43)!;
       },
       codec: SseCodec(
@@ -3681,7 +3688,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeErrorData: null,
       ),
       constMeta: kCrateApiStructureDesignerAiAssistantApiAiQueryLayoutConstMeta,
-      argValues: [scope, nodes, bbox],
+      argValues: [scope, nodes, bbox, findings],
       apiImpl: this,
     ));
   }
@@ -3690,7 +3697,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerAiAssistantApiAiQueryLayoutConstMeta =>
           const TaskConstMeta(
             debugName: "ai_query_layout",
-            argNames: ["scope", "nodes", "bbox"],
+            argNames: ["scope", "nodes", "bbox", "findings"],
           );
 
   @override

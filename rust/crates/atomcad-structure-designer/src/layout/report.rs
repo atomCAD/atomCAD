@@ -25,11 +25,13 @@ use serde_json::{Value, json};
 
 use crate::layout::arrange::{input_pin_offset, output_pin_offset};
 use crate::layout::common::is_comment;
-use crate::layout::delta::{WireEnd, WireKey, WireSlot};
-use crate::layout::motion::{GAP, Rect, upstream_closure};
+use crate::layout::delta::{WireEnd, WireKey, WireSlot, collect_wires};
+use crate::layout::motion::{GAP, Rect, measure_scope, upstream_closure};
+use crate::layout::readout::scope_ids_by_name;
 use crate::layout::wire_geometry::WireCurve;
 use crate::node_layout::nodes_overlap;
 use crate::node_network::{ArgumentKind, NodeNetwork, SourcePin};
+use crate::node_type_registry::NodeTypeRegistry;
 use crate::text_format::{NamePath, PositionSnapshot, PushDir, unique_node_names};
 
 /// Why an existing node moved.
@@ -211,6 +213,11 @@ pub struct LayoutReport {
     pub moved: Vec<LayoutMove>,
     pub findings: Vec<Finding>,
     pub warnings: Vec<LayoutWarning>,
+    /// How many problems of each kind the drawing had before the edit and has
+    /// after it, against no baseline, summed over the scopes in which an
+    /// existing node moved. `None` when none moved. Filled by the caller, which
+    /// holds the pre-edit network ([`absolute_findings`]).
+    pub totals: Option<FindingTotals>,
     /// How many layout statements the edit had. Not serialized: it only
     /// decides whether there is a report at all.
     pub statements: usize,
@@ -303,8 +310,162 @@ impl LayoutReport {
                     .collect(),
             ),
         );
+        if let Some(totals) = &self.totals {
+            out.insert("totals".into(), totals.to_json());
+        }
         Value::Object(out)
     }
+}
+
+/// How many findings of each kind.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct FindingCounts {
+    pub overlap: usize,
+    pub backward_wire: usize,
+    pub wire_over_node: usize,
+    pub crossing: usize,
+}
+
+impl FindingCounts {
+    pub fn of<'a>(findings: impl IntoIterator<Item = &'a Finding>) -> Self {
+        let mut counts = Self::default();
+        for finding in findings {
+            *counts.slot(finding.kind) += 1;
+        }
+        counts
+    }
+
+    pub fn add(&mut self, other: Self) {
+        self.overlap += other.overlap;
+        self.backward_wire += other.backward_wire;
+        self.wire_over_node += other.wire_over_node;
+        self.crossing += other.crossing;
+    }
+
+    pub fn get(&self, kind: FindingKind) -> usize {
+        match kind {
+            FindingKind::Overlap => self.overlap,
+            FindingKind::BackwardWire => self.backward_wire,
+            FindingKind::WireOverNode => self.wire_over_node,
+            FindingKind::Crossing => self.crossing,
+        }
+    }
+
+    fn slot(&mut self, kind: FindingKind) -> &mut usize {
+        match kind {
+            FindingKind::Overlap => &mut self.overlap,
+            FindingKind::BackwardWire => &mut self.backward_wire,
+            FindingKind::WireOverNode => &mut self.wire_over_node,
+            FindingKind::Crossing => &mut self.crossing,
+        }
+    }
+}
+
+/// Every kind, in the order the read-out and `totals` list them.
+pub const FINDING_KINDS: [FindingKind; 4] = [
+    FindingKind::Crossing,
+    FindingKind::WireOverNode,
+    FindingKind::Overlap,
+    FindingKind::BackwardWire,
+];
+
+/// The drawing's problems before and after an edit: the `layout` section's
+/// `totals`. Unlike `findings`, these count what was already there too, so a
+/// relayout that removes five crossings and adds one reads as the net
+/// improvement it is.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct FindingTotals {
+    pub before: FindingCounts,
+    pub after: FindingCounts,
+}
+
+impl FindingTotals {
+    /// `{"crossing": [before, after], …}`, every kind present.
+    pub fn to_json(&self) -> Value {
+        let mut out = serde_json::Map::new();
+        for kind in FINDING_KINDS {
+            out.insert(
+                kind.as_str().into(),
+                json!([self.before.get(kind), self.after.get(kind)]),
+            );
+        }
+        Value::Object(out)
+    }
+}
+
+/// Every layout problem one scope of `root` has now, measured against no
+/// baseline: each overlap, each wire running behind a node, each crossing and
+/// each backward wire, by the same tests the edit findings use. `scope_path`
+/// is the chain of HOF ids down to the scope (empty for the root) and
+/// `scope_names` the same chain by name, which prefixes every path reported.
+///
+/// [`scope_findings`] with an empty snapshot and every wire of the scope as
+/// "added": nothing was there before, so everything there now is reported.
+/// Sorted by kind, then message. An unresolvable scope has no findings.
+pub fn absolute_findings(
+    root: &NodeNetwork,
+    registry: &NodeTypeRegistry,
+    scope_path: &[u64],
+    scope_names: &[String],
+) -> Vec<Finding> {
+    let mut scope = root;
+    for owner in scope_path {
+        let Some(body) = scope.nodes.get(owner).and_then(|node| node.zone.as_deref()) else {
+            return Vec::new();
+        };
+        scope = body;
+    }
+    let sizes = measure_scope(scope, registry);
+    let mut wires: Vec<WireKey> = collect_wires(root, scope_path, scope_names)
+        .into_iter()
+        .collect();
+    wires.sort();
+    let mut findings = scope_findings(
+        scope,
+        &sizes,
+        scope_names,
+        &PositionSnapshot::default(),
+        &wires,
+    );
+    findings.sort_by(|a, b| {
+        a.kind
+            .as_str()
+            .cmp(b.kind.as_str())
+            .then_with(|| a.message.cmp(&b.message))
+    });
+    findings
+}
+
+/// The `totals` of an edit: [`absolute_findings`] counted in `before` (the
+/// pre-edit network) and `after` (the edited one), over every scope holding a
+/// node in `moved`. `None` when nothing existing moved — an edit that only
+/// added nodes has its `findings` and nothing to compare. A scope that does
+/// not resolve on one side (a body the edit created or removed) counts zero
+/// there.
+pub fn finding_totals(
+    before: &NodeNetwork,
+    after: &NodeNetwork,
+    registry: &NodeTypeRegistry,
+    moved: &[LayoutMove],
+) -> Option<FindingTotals> {
+    if moved.is_empty() {
+        return None;
+    }
+    let scopes: std::collections::BTreeSet<&[String]> = moved
+        .iter()
+        .map(|m| &m.path[..m.path.len().saturating_sub(1)])
+        .collect();
+    let mut totals = FindingTotals::default();
+    for scope in scopes {
+        let count = |root: &NodeNetwork| {
+            scope_ids_by_name(root, scope)
+                .map(|ids| FindingCounts::of(&absolute_findings(root, registry, &ids, scope)))
+                .unwrap_or_default()
+        };
+        totals.before.add(count(before));
+        totals.after.add(count(after));
+    }
+    Some(totals)
 }
 
 fn px(value: f64) -> i64 {

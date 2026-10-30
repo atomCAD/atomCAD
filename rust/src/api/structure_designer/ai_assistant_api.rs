@@ -134,20 +134,23 @@ pub fn ai_edit_network(code: String, replace: bool, dry_run: bool) -> String {
 /// * `nodes` - `,`-separated node names to list; empty for no name filter
 /// * `bbox` - `x0,y0,x1,y1`, every node whose box intersects it; empty for no
 ///   box filter. Exclusive with `nodes`.
+/// * `findings` - also list the scope's layout problems (`--findings`): every
+///   overlap, wire behind a node, crossing and backward wire there is now,
+///   narrowed to the selected nodes by a filter.
 ///
 /// # Returns
 /// A header line (`# Main: extent (x0,y0)–(x1,y1), N nodes; …`), one line per
 /// selected node (`name  x,y  w×h  [tags]`, tags `ai` / `comment` / `body`),
-/// and the inferred columns and rows that hold a selected node. A problem is
-/// a `# Error: …` line.
+/// the inferred columns and rows that hold a selected node, and with
+/// `findings` a `# findings: …` section. A problem is a `# Error: …` line.
 #[flutter_rust_bridge::frb(sync)]
-pub fn ai_query_layout(scope: String, nodes: String, bbox: String) -> String {
+pub fn ai_query_layout(scope: String, nodes: String, bbox: String, findings: bool) -> String {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
                 cad_instance
                     .structure_designer
-                    .query_active_layout(&scope, &nodes, &bbox)
+                    .query_active_layout_with(&scope, &nodes, &bbox, findings)
             },
             "# Error: Could not access structure designer\n".to_string(),
         )

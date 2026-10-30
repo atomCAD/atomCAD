@@ -19,6 +19,7 @@ use glam::DVec2;
 
 use super::common::{Gap, is_comment};
 use super::motion::{COLUMN_TOLERANCE, Rect};
+use super::report::{FINDING_KINDS, Finding, FindingCounts, absolute_findings};
 use super::size::rendered_node_size;
 use crate::node_network::{NodeNetwork, resolve_body_collapsed};
 use crate::node_type_registry::NodeTypeRegistry;
@@ -239,6 +240,99 @@ pub fn layout_readout(
             })
             .collect();
         push_table(&mut out, &rows, 0);
+    }
+    Ok(out)
+}
+
+/// The ids of the HOF chain a name path of scopes leads to inside `network`
+/// (empty for the root), or `None` when a segment names no node or a node
+/// without a body.
+pub fn scope_ids_by_name(network: &NodeNetwork, scope: &[String]) -> Option<Vec<u64>> {
+    resolve_scope(network, "", scope).ok().map(|(_, ids)| ids)
+}
+
+/// How many findings [`findings_readout`] lists before it stops and says how
+/// many more there are. A tangled network has dozens; the counts line always
+/// carries the whole number, and `--nodes` / `--box` narrow the list.
+pub const MAX_LISTED_FINDINGS: usize = 20;
+
+/// The `# findings` section of `query --layout --findings`: every layout
+/// problem the scope has now ([`absolute_findings`]), not only what an edit
+/// created. A counts line per kind, then one line per finding, at most
+/// [`MAX_LISTED_FINDINGS`].
+///
+/// With a filter, only findings involving a selected node are counted and
+/// listed, and the counts line also gives the scope's total.
+pub fn findings_readout(
+    network: &NodeNetwork,
+    registry: &NodeTypeRegistry,
+    network_name: &str,
+    scope: &[String],
+    filter: &ReadoutFilter,
+) -> Result<String, String> {
+    let (current, ids) = resolve_scope(network, network_name, scope)?;
+    let all = absolute_findings(network, registry, &ids, scope);
+
+    let selected: Option<HashSet<String>> = match filter {
+        ReadoutFilter::All => None,
+        ReadoutFilter::Nodes(names) => Some(names.iter().cloned().collect()),
+        ReadoutFilter::Box(area) => Some(
+            scope_items(current, registry)
+                .into_iter()
+                .filter(|item| item.rect.overlaps(area, 0.0))
+                .map(|item| item.name)
+                .collect(),
+        ),
+    };
+    let shown: Vec<&Finding> = all
+        .iter()
+        .filter(|finding| {
+            selected.as_ref().is_none_or(|names| {
+                finding
+                    .nodes
+                    .iter()
+                    .any(|path| path.last().is_some_and(|name| names.contains(name)))
+            })
+        })
+        .collect();
+
+    let counts = FindingCounts::of(shown.iter().copied());
+    let mut out = String::from("# findings");
+    if selected.is_some() {
+        out.push_str(" involving the listed nodes");
+    }
+    out.push_str(": ");
+    out.push_str(
+        &FINDING_KINDS
+            .iter()
+            .map(|&kind| format!("{} {}", counts.get(kind), kind.as_str()))
+            .collect::<Vec<_>>()
+            .join(", "),
+    );
+    if selected.is_some() {
+        out.push_str(&format!("; {} in the whole scope", all.len()));
+    }
+    out.push('\n');
+
+    let width = shown
+        .iter()
+        .map(|finding| finding.kind.as_str().len())
+        .max()
+        .unwrap_or(0);
+    for finding in shown.iter().take(MAX_LISTED_FINDINGS) {
+        let kind = finding.kind.as_str();
+        out.push_str(&format!(
+            "{}{}  {}\n",
+            kind,
+            " ".repeat(width - kind.len()),
+            finding.message
+        ));
+    }
+    if shown.len() > MAX_LISTED_FINDINGS {
+        out.push_str(&format!(
+            "# {} more not listed; narrow with --nodes or --box\n",
+            shown.len() - MAX_LISTED_FINDINGS
+        ));
     }
     Ok(out)
 }

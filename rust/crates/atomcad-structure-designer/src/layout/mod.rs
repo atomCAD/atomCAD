@@ -69,11 +69,12 @@ pub use motion::{
     shift_half_plane_holding, snap_shift_line, upstream_closure,
 };
 pub use readout::{
-    IMAGE_FRAME_MARGIN, ImageFrame, ReadoutFilter, layout_image_frame, layout_readout,
-    parse_readout_args,
+    IMAGE_FRAME_MARGIN, ImageFrame, MAX_LISTED_FINDINGS, ReadoutFilter, findings_readout,
+    layout_image_frame, layout_readout, parse_readout_args,
 };
 pub use report::{
-    Causes, Finding, FindingKind, LayoutMove, LayoutReport, LayoutWarning, MoveCause, PlacedBox,
+    Causes, FINDING_KINDS, Finding, FindingCounts, FindingKind, FindingTotals, LayoutMove,
+    LayoutReport, LayoutWarning, MoveCause, PlacedBox, absolute_findings, finding_totals,
     scope_findings,
 };
 pub use size::{rendered_body_size, rendered_node_size, rendered_node_size_by_id};

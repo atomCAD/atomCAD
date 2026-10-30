@@ -110,6 +110,7 @@ statements, the result says so under `layout`:
 | `moved` | every node that existed before the edit and whose position changed: `from` and `to`, the `cause` of its first move and a short `why`. If it moved again for another reason, `also` lists those causes in order. |
 | `findings` | problems the edit created and nothing repaired, one line each (below) |
 | `warnings` | layout statements that could not be carried out: `line`, `statement`, `problem`, and the `fallback` that happened instead |
+| `totals` | only when a node that existed before moved: how many of each kind of problem (below) the drawing had before the edit and has after it, counting the ones that were already there — `"crossing": [8, 3]`. Summed over the network (or bodies) where something moved. |
 
 Coordinates are canvas pixels — x to the right, y **down** — and a position is a
 node's top-left corner. A node inside a higher-order function's body has body
@@ -128,7 +129,9 @@ everywhere else in the result. Values are rounded to whole pixels.
 
 **Findings** are only ever about what *this* edit created. Overlaps, backward
 wires, hidden wires and crossings your drawing already had are left alone and
-never reported.
+never reported there. `totals` is where they show: an edit that rearranges
+nodes and removes five old crossings while adding one reads `[6, 2]`. To list
+the problems themselves, use `query --layout --findings` (below).
 
 | `kind` | Reported when |
 |---|---|
@@ -201,6 +204,30 @@ row      hole_r, hole       gap 50
   coordinate is negative.
 
 In the REPL, `query --layout` takes the same options.
+
+#### Every problem the drawing has now: `--findings`
+
+```bash
+atomcad-cli query --layout --findings                 # the whole network
+atomcad-cli query --layout --findings --nodes=a,b     # only those involving a or b
+```
+
+Adds a `# findings` section after the groups: a count of each kind, then one
+line per problem, with the same kinds and messages as an edit's `findings` —
+but against no baseline, so everything there is now is listed, however old:
+
+```
+# findings: 2 crossing, 1 wire_over_node, 0 overlap, 0 backward_wire
+crossing        wire a -> x crosses wire b -> y
+crossing        wire c -> y crosses wire d -> x
+wire_over_node  wire s -> t runs behind k for 140 px
+```
+
+At most 20 lines are listed; a last line says how many more there are. With
+`--nodes` or `--box`, only problems involving a listed node are counted and
+listed, and the count line adds the total for the whole network (or body).
+`--findings` implies `--layout`. Use it before tidying a drawing, and again
+afterwards (or read the edit's `totals`) to see whether it got better.
 
 #### A picture of the same area: `--image`
 

@@ -277,6 +277,15 @@ result's `layout` section and copies into the AI edit log. Three rules:
   Mirror-image wires meet exactly at a sample point, so the segment test
   counts touching; wires sharing a pin, or joining the same two nodes (their
   crossing is pin order, which no placement fixes), are skipped instead.
+- **Absolute findings are `scope_findings` against no baseline, never a
+  second implementation.** `absolute_findings` passes an empty snapshot and
+  every wire of the scope as added, so everything there now is reported; it
+  feeds both `query --layout --findings` (`readout::findings_readout`) and the
+  edit's `totals` (`finding_totals`, before = the pre-edit clone
+  `ai_text_edit` keeps for rollback, after = the edited network). `totals` is
+  computed only when an existing node moved: two whole-scope passes per
+  touched scope. Keep `findings` itself baseline-relative — that is what lets
+  an agent trust it as "what my edit broke".
 
 ## Step 2½: layout statements and the pinned set
 

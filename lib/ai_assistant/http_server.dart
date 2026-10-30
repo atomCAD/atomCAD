@@ -556,7 +556,11 @@ class AiAssistantServer {
     final scope = params['scope'] ?? '';
     final nodes = params['nodes'] ?? '';
     final box = params['box'] ?? '';
-    final result = ai_api.aiQueryLayout(scope: scope, nodes: nodes, bbox: box);
+    final result = ai_api.aiQueryLayout(
+        scope: scope,
+        nodes: nodes,
+        bbox: box,
+        findings: params['findings'] == 'true');
     request.response.headers.contentType = ContentType.text;
     request.response.write(result);
 

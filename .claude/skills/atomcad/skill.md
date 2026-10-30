@@ -381,6 +381,12 @@ existed, left a problem behind, or had layout statements, the result has a
   `nodes` = both wires' source and destination). Wires are judged as drawn:
   one curve between the two pins. Pre-existing overlaps, backward wires,
   hidden wires and crossings are the user's baseline and never reported.
+- `totals` — present when an existing node moved: each kind's count before
+  and after the edit, the pre-existing ones included,
+  `{ "crossing": [8, 3], "wire_over_node": [2, 0], "overlap": [0, 0],
+  "backward_wire": [0, 0] }`, summed over the scopes where something moved.
+  The net effect of a rearrangement; `findings` cannot show one that fixed
+  old problems, or kept them.
 - `warnings` — layout statements that could not be carried out:
   `{ "line", "statement", "problem", "fallback" }`. The edit itself still
   applied; the `fallback` says what happened to the subject instead.
@@ -435,6 +441,12 @@ atomcad-cli query --layout --scope=m1             # a HOF body (path: m1/m2)
   members print as `…`.
 - `--nodes` and `--box` are exclusive. An unknown name prints
   `(no such node)`. Use `--box=…` (with `=`) when a coordinate is negative.
+- `--findings` adds a `# findings` section: the count of each kind, then one
+  line per problem (`crossing  wire a -> x crosses wire b -> y`), the same
+  kinds and messages as an edit's `findings` but against no baseline — every
+  problem the drawing has now. At most 20 lines, then how many more. With
+  `--nodes` / `--box`, only problems involving a listed node, plus the scope's
+  total.
 
 #### `query --layout --image`: a picture of the same area
 
@@ -547,6 +559,10 @@ straighten [cut, fill]
   user's arrangement matters.
 - **Findings are defects your edit created.** Fix them, or tell the user why
   you did not.
+- **Problems that were already there are visible too, on request.** `query
+  --layout --findings` lists them; an edit's `totals` says whether moving
+  nodes made the drawing better or worse overall. When tidying is the task,
+  those are the measure, not an empty `findings`.
 - **The user's nodes are theirs.** An untagged node was placed by a person.
   Move it only when asked, or as the necessary side effect of making room, and
   say so when you do.
