@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:args/args.dart';
 import 'package:http/http.dart' as http;
 
@@ -1465,7 +1466,7 @@ Future<void> _runMultilineEdit(String serverUrl, bool replace,
   // script at the first blank line — a `query` printout has one on line 2, so
   // a `--replace` fed its own output wiped the network.
   final lines =
-      isTty ? _readUntilTerminator(showPrompt: false) : _readStdinToEof();
+      isTty ? _readUntilTerminator(showPrompt: false) : await _readStdinToEof();
 
   if (lines == null || lines.isEmpty) {
     if (isTty) {
@@ -1479,15 +1480,29 @@ Future<void> _runMultilineEdit(String serverUrl, bool replace,
 }
 
 /// Read every line of piped stdin, blank lines included.
-List<String>? _readStdinToEof() {
-  final lines = <String>[];
-  while (true) {
-    final line = stdin.readLineSync();
-    if (line == null) {
-      break;
-    }
-    lines.add(line);
+///
+/// Read as bytes and decoded as UTF-8, not with `readLineSync`'s default
+/// `systemEncoding`: on Windows that is the ANSI code page (cp1252), which
+/// turned every non-ASCII character of a UTF-8 script — node names like
+/// `z_rect◇{110}`, `120°[111]` — into mojibake (`â—‡`), so the names matched
+/// nothing. Input that is not valid UTF-8 falls back to the system encoding,
+/// as before; a leading BOM (PowerShell's `Out-File`) is dropped.
+Future<List<String>?> _readStdinToEof() async {
+  final builder = BytesBuilder(copy: false);
+  await for (final chunk in stdin) {
+    builder.add(chunk);
   }
+  final bytes = builder.takeBytes();
+  String text;
+  try {
+    text = utf8.decode(bytes);
+  } on FormatException {
+    text = systemEncoding.decode(bytes);
+  }
+  if (text.startsWith('\uFEFF')) {
+    text = text.substring(1);
+  }
+  final lines = const LineSplitter().convert(text);
   return lines.isEmpty ? null : lines;
 }
 
