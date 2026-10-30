@@ -402,9 +402,13 @@ network"`) and **one entry in `StructureDesigner::ai_edit_log`**
   (`text_tab_edit.rs`) does the same. A clone, not a `.cnnd` restore, so
   runtime-only node state survives. Validation errors do not roll back.
 - **Two verdicts, never one.** `applied` is the editor's own ("the statements
-  parsed and landed"); `success` folds in a *whole-network* validation verdict,
-  so an already-broken network makes every later edit report `success: false`
-  however clean it was. Anything gating on "did the edit work" wants `applied`.
+  parsed and landed"); `success` folds in the blocking validation errors the
+  edit *introduced*. Errors already there before it — matched by
+  `path: message` against a baseline taken with the other "before" snapshots
+  (`split_against_baseline`) — go to `preexisting_*` and fail nothing, the
+  same rule as the layout findings; `network_valid` is the whole-network
+  verdict. Gates about what the editor did (layout, dirty flag, undo) want
+  `applied`.
 - **Layout here is `layout::layout_incremental`, and it always runs on an
   applied edit.** It is repair, not layout: it lays out only the nodes the edit
   added, fits them into the existing drawing, and leaves every other node where

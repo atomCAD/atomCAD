@@ -7,8 +7,9 @@
 //! naive recording would get wrong:
 //!
 //! - **two verdicts, not one** (D8) — `applied` is the editor's own, `success`
-//!   folds in a *whole-network* validation verdict, and `applied && !success`
-//!   is the ordinary "my edit landed, the network is broken elsewhere";
+//!   folds in the validation errors the edit *introduced*, and
+//!   `applied && !success` is "my edit landed and broke something"; errors the
+//!   network already had are reported apart and fail nothing;
 //! - **text snapshots, not a delta** (D2) — a `--replace` mints fresh node ids
 //!   for everything, so only the text is comparable across one;
 //! - **the layout record is about every scope** — since Phase 5 of
@@ -274,23 +275,98 @@ fn an_hof_with_no_body_records_applied_but_not_success() {
 }
 
 /// The case a single glyph would misreport: the *previous* edit left the
-/// network blocking-invalid, so a later, entirely clean edit still records
-/// `success: false`. `applied` is what says the AI did its job.
+/// network blocking-invalid. A later, entirely clean edit is the AI's success
+/// all the same; the old error is reported apart, as the user's baseline, and
+/// `network_valid` carries the whole-network verdict.
 #[test]
-fn an_edit_on_an_already_invalid_network_is_applied_but_not_successful() {
+fn an_edit_on_an_already_invalid_network_succeeds_and_reports_the_old_error_apart() {
     let mut sd = designer();
     sd.ai_text_edit("m1 = map { input_type: Int, output_type: Int }", false);
 
     let outcome = sd.ai_text_edit("s = sphere { radius: 5 }", false);
-    assert!(!outcome.result.success);
+    assert!(outcome.result.success, "{:?}", outcome.result.errors);
+    assert!(outcome.result.applied);
+    assert!(outcome.result.errors.is_empty());
+    assert_eq!(outcome.result.network_valid, Some(false));
+    assert_eq!(outcome.result.preexisting_errors.len(), 1);
+    assert!(outcome.result.preexisting_errors[0].starts_with("m1: "));
 
     let rec = sd.ai_edit_log.last().unwrap();
     assert!(rec.applied);
-    assert!(!rec.success);
+    assert!(rec.success);
     assert_eq!(rec.nodes_created, vec!["s".to_string()]);
-    // The two are distinguishable in the row, which is the whole point of
-    // recording both.
-    assert_ne!(rec.applied, rec.success);
+
+    // The JSON the AI reads says the same.
+    let json: serde_json::Value = serde_json::from_str(&outcome.to_json()).unwrap();
+    assert_eq!(json["success"], true);
+    assert_eq!(json["applied"], true);
+    assert_eq!(json["network_valid"], false);
+    assert_eq!(json["preexisting_errors"].as_array().unwrap().len(), 1);
+}
+
+/// An edit that adds a second broken node on top of an old one fails, and
+/// names only the node it broke.
+#[test]
+fn a_new_error_on_an_already_invalid_network_fails_the_edit() {
+    let mut sd = designer();
+    sd.ai_text_edit("m1 = map { input_type: Int, output_type: Int }", false);
+
+    let outcome = sd.ai_text_edit("m2 = map { input_type: Int, output_type: Int }", false);
+    assert!(!outcome.result.success);
+    assert!(outcome.result.applied);
+    assert_eq!(
+        outcome.result.errors.len(),
+        1,
+        "{:?}",
+        outcome.result.errors
+    );
+    assert!(outcome.result.errors[0].starts_with("m2: "));
+    assert_eq!(outcome.result.preexisting_errors.len(), 1);
+    assert!(outcome.result.preexisting_errors[0].starts_with("m1: "));
+}
+
+/// Deleting the broken node is reported as a fix, and leaves the network valid.
+#[test]
+fn an_edit_that_removes_an_error_reports_it_fixed() {
+    let mut sd = designer();
+    sd.ai_text_edit("m1 = map { input_type: Int, output_type: Int }", false);
+
+    let outcome = sd.ai_text_edit("delete m1", false);
+    assert!(outcome.result.success);
+    assert_eq!(outcome.result.network_valid, Some(true));
+    assert_eq!(outcome.result.errors_fixed.len(), 1);
+    assert!(outcome.result.errors_fixed[0].starts_with("m1: "));
+    assert!(outcome.result.preexisting_errors.is_empty());
+}
+
+/// A `--replace` mints fresh ids for every node; the baseline is matched by
+/// name, so a broken node recreated under its own name is still the old error.
+#[test]
+fn a_replace_keeps_an_old_error_old() {
+    let mut sd = designer();
+    sd.ai_text_edit("m1 = map { input_type: Int, output_type: Int }", false);
+
+    let outcome = sd.ai_text_edit(
+        "m1 = map { input_type: Int, output_type: Int }
+s = sphere { radius: 5 }",
+        true,
+    );
+    assert!(outcome.result.success, "{:?}", outcome.result.errors);
+    assert_eq!(outcome.result.preexisting_errors.len(), 1);
+}
+
+/// An edit that never applied says so, and claims nothing about validity.
+#[test]
+fn a_rolled_back_edit_is_not_applied() {
+    let mut sd = designer();
+    let outcome = sd.ai_text_edit("s = no_such_node_type { }", false);
+    assert!(!outcome.result.success);
+    assert!(!outcome.result.applied);
+    assert_eq!(outcome.result.network_valid, None);
+    let json: serde_json::Value = serde_json::from_str(&outcome.to_json()).unwrap();
+    assert_eq!(json["applied"], false);
+    assert!(json.get("network_valid").is_none());
+    assert!(json.get("preexisting_errors").is_none());
 }
 
 // ============================================================================

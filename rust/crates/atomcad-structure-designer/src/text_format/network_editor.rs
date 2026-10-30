@@ -299,8 +299,18 @@ fn scope_net_mut<'n>(root: &'n mut NodeNetwork, scope: &[u64]) -> Option<&'n mut
 /// bare name cannot tell the AI — or a name-keyed diff — which one moved.
 #[derive(Debug, Clone, Serialize)]
 pub struct EditResult {
-    /// Whether the edit operation succeeded overall.
+    /// Whether the edit operation succeeded overall. Through the AI edit
+    /// (`ai_text_edit`): applied, and left no blocking error the network did
+    /// not already have.
     pub success: bool,
+    /// The statements parsed and landed (the editor's own verdict, before any
+    /// validation is folded in). Set by `ai_text_edit`; false on every edit
+    /// that was refused or rolled back.
+    pub applied: bool,
+    /// After an applied AI edit: whether the whole network is free of blocking
+    /// errors, pre-existing ones included. `None` when the edit did not apply.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub network_valid: Option<bool>,
     /// Paths of nodes that were created.
     pub nodes_created: Vec<String>,
     /// Paths of nodes that were updated.
@@ -319,12 +329,26 @@ pub struct EditResult {
     pub errors: Vec<String>,
     /// Warning messages (non-fatal issues).
     pub warnings: Vec<String>,
+    /// Blocking validation errors the network already had before the edit and
+    /// still has: the user's baseline, not this edit's doing. They do not fail
+    /// the edit. Matched by `path: message`.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub preexisting_errors: Vec<String>,
+    /// Non-blocking validation errors the network already had and still has.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub preexisting_warnings: Vec<String>,
+    /// Blocking validation errors the network had before the edit and no
+    /// longer has.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub errors_fixed: Vec<String>,
 }
 
 impl EditResult {
     fn new() -> Self {
         Self {
             success: true,
+            applied: true,
+            network_valid: None,
             nodes_created: Vec::new(),
             nodes_updated: Vec::new(),
             nodes_deleted: Vec::new(),
@@ -334,12 +358,15 @@ impl EditResult {
             output_set: None,
             errors: Vec::new(),
             warnings: Vec::new(),
+            preexisting_errors: Vec::new(),
+            preexisting_warnings: Vec::new(),
+            errors_fixed: Vec::new(),
         }
     }
 
     /// Record an error. Public so the caller can fold a post-edit
     /// `validate_network` verdict into the same result (D15) — an edit that
-    /// parsed and applied but left the network broken is not a success.
+    /// parsed and applied but broke the network is not a success.
     pub fn add_error(&mut self, error: impl Into<String>) {
         self.success = false;
         self.errors.push(error.into());

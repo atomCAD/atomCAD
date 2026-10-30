@@ -122,9 +122,11 @@ Returns `EditResult` with success/failure/warning counts. Its node lists carry
 **full paths** (`m1/a`), not bare names — with bodies in play `m1/a` and `m2/a`
 are different nodes.
 
-`EditResult.success` means **parsed, applied *and* validates**: `ai_edit_network`
-folds `validate_network`'s verdict in (blocking → `errors`, non-blocking →
-`warnings`), which is the AI's only signal that an edit broke something. The
+`EditResult.success` means **parsed, applied *and* broke nothing**: `ai_text_edit`
+folds in the validation errors the edit introduced (blocking → `errors`,
+non-blocking → `warnings`); errors the network already had go to
+`preexisting_*` and do not fail it (see the crate `AGENTS.md`, "Two
+verdicts"). This is the AI's only signal that an edit broke something. The
 gates that are about *what the editor did* — auto-layout, the dirty flag — read
 a separate `edit_applied` flag captured before that fold, so a valid-but-flagged
 edit still lays out and still marks the project dirty.

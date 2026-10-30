@@ -87,6 +87,8 @@ impl AiTextEditOutcome {
         Self {
             result: EditResult {
                 success: false,
+                applied: false,
+                network_valid: None,
                 nodes_created: vec![],
                 nodes_updated: vec![],
                 nodes_deleted: vec![],
@@ -96,6 +98,9 @@ impl AiTextEditOutcome {
                 output_set: None,
                 errors,
                 warnings: vec![],
+                preexisting_errors: vec![],
+                preexisting_warnings: vec![],
+                errors_fixed: vec![],
             },
             layout: None,
             dry_run,
@@ -176,7 +181,7 @@ impl StructureDesigner {
         // delta. `snapshot_node_positions` is the editor's own identity walk,
         // shared so the layout measurement and the identity match it measures
         // cannot disagree.
-        let (before_text, before_positions, before_wires) = match self
+        let (before_text, before_positions, before_wires, before_errors) = match self
             .node_type_registry
             .node_networks
             .get(&network_name)
@@ -190,6 +195,10 @@ impl StructureDesigner {
                 // everything else, so a `--replace` does not report the
                 // whole network as newly wired.
                 layout::collect_all_wires(network),
+                // The validation baseline: what was already broken is the
+                // user's, not this edit's (the same rule as the layout
+                // findings). The stored errors of the last validation pass.
+                located_validation_errors(network),
             ),
             // --- Rejection path 3: the network is gone ---------------
             None => {
@@ -301,27 +310,36 @@ impl StructureDesigner {
             }
         }
 
-        // `success` means *parsed, applied, and validates* — not merely
+        // `success` means *parsed, applied, and broke nothing* — not merely
         // *parsed* (`doc/design_hof_body_text_format.md` D15). The verdict
         // above used to be computed for its side effects and thrown away, which
         // is how an edit that silently emptied a zone body could still report
         // `success: true`. Errors are reported with the offending node's full
         // path (D10) so the AI can find it, including inside a body.
+        //
+        // Only errors the edit *introduced* fail it. One the network already
+        // had (matched by `path: message` against the baseline) goes to
+        // `preexisting_*`: on a network that is broken elsewhere — a missing
+        // linked library is the everyday case — every edit would otherwise
+        // report `success: false`, and an AI soon learns to ignore the flag,
+        // including on the edit that really did break something. The
+        // whole-network verdict is `network_valid`.
         if let Some(network) = self.node_type_registry.node_networks.get(&network_name) {
-            for error in collect_scoped_validation_errors(network) {
-                let located = match error_node_path(network, &error.scope_path, error.node_id) {
-                    Some(path) => format!("{}: {}", path, error.error_text),
-                    None => error.error_text.clone(),
-                };
-                // The severity split is the existing one: blocking errors fail
-                // the edit, non-blocking ones are advisory
-                // (`project_nonblocking_validation_errors`).
-                if error.blocking {
-                    result.add_error(located);
-                } else {
-                    result.add_warning(located);
-                }
+            let after_errors = located_validation_errors(network);
+            let split = split_against_baseline(&before_errors, after_errors);
+            // The severity split is the existing one: blocking errors fail
+            // the edit, non-blocking ones are advisory
+            // (`project_nonblocking_validation_errors`).
+            for error in split.new_errors {
+                result.add_error(error);
             }
+            for warning in split.new_warnings {
+                result.add_warning(warning);
+            }
+            result.network_valid = Some(split.network_valid);
+            result.preexisting_errors = split.preexisting_errors;
+            result.preexisting_warnings = split.preexisting_warnings;
+            result.errors_fixed = split.errors_fixed;
         }
 
         // --- Layout: the incremental pass (D1, D8) -----------------------
@@ -441,9 +459,10 @@ impl StructureDesigner {
         // (D8) — including `description_set` / `summary_set` / `output_set`,
         // which are easy to drop and are the only trace an `output` re-point
         // leaves. The two verdicts are kept apart: `applied` is the editor's
-        // own, `success` is that folded with the whole-network validation
-        // above, and `applied && !success` is the ordinary "my edit landed, the
-        // network is still broken elsewhere".
+        // own, `success` is that folded with the validation errors the edit
+        // introduced, and `applied && !success` is "my edit landed and broke
+        // something". Errors the network already had are not the edit's and
+        // are not in `errors`.
         let mut record = AiEditRecord::applied_edit(
             network_name.clone(),
             code.to_string(),
@@ -692,6 +711,87 @@ pub const EDIT_NOT_APPLIED_MESSAGE: &str =
 pub fn rolled_back_errors(mut errors: Vec<String>) -> Vec<String> {
     errors.push(EDIT_NOT_APPLIED_MESSAGE.to_string());
     errors
+}
+
+/// Every validation error of `network`, bodies included, as the AI is shown it
+/// (`path: message`, the path the text format addresses the node by; the bare
+/// message for a network-level error), paired with whether it blocks. This
+/// spelling is also the key that matches an error across an edit: node ids do
+/// not survive a `--replace`, names do.
+pub fn located_validation_errors(network: &NodeNetwork) -> Vec<(String, bool)> {
+    collect_scoped_validation_errors(network)
+        .into_iter()
+        .map(|error| {
+            let located = match error_node_path(network, &error.scope_path, error.node_id) {
+                Some(path) => format!("{}: {}", path, error.error_text),
+                None => error.error_text,
+            };
+            (located, error.blocking)
+        })
+        .collect()
+}
+
+/// The validation errors after an edit, split against those before it.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct ValidationSplit {
+    /// Blocking errors the edit introduced: they fail it.
+    pub new_errors: Vec<String>,
+    /// Non-blocking errors the edit introduced.
+    pub new_warnings: Vec<String>,
+    /// Blocking errors that were there before and still are.
+    pub preexisting_errors: Vec<String>,
+    /// Non-blocking errors that were there before and still are.
+    pub preexisting_warnings: Vec<String>,
+    /// Blocking errors that were there before and are gone.
+    pub errors_fixed: Vec<String>,
+    /// No blocking error remains, new or old.
+    pub network_valid: bool,
+}
+
+/// Split `after` against `before` (both from [`located_validation_errors`]).
+/// An error is matched by its text and severity, as a multiset: two identical
+/// errors before and three after is one new one. Order follows `after` (and
+/// `before` for the fixed ones). An error whose wording the edit changed reads
+/// as one fixed and one new, which is what it is to the reader.
+pub fn split_against_baseline(
+    before: &[(String, bool)],
+    after: Vec<(String, bool)>,
+) -> ValidationSplit {
+    use std::collections::HashMap;
+    let mut split = ValidationSplit {
+        network_valid: !after.iter().any(|(_, blocking)| *blocking),
+        ..ValidationSplit::default()
+    };
+    let mut baseline: HashMap<&(String, bool), usize> = HashMap::new();
+    for error in before {
+        *baseline.entry(error).or_default() += 1;
+    }
+    let mut remaining: HashMap<(String, bool), usize> = HashMap::new();
+    for (text, blocking) in after {
+        let key = (text, blocking);
+        let preexisting = match baseline.get_mut(&key) {
+            Some(count) if *count > 0 => {
+                *count -= 1;
+                true
+            }
+            _ => false,
+        };
+        *remaining.entry(key.clone()).or_default() += 1;
+        let (text, blocking) = key;
+        match (blocking, preexisting) {
+            (true, false) => split.new_errors.push(text),
+            (false, false) => split.new_warnings.push(text),
+            (true, true) => split.preexisting_errors.push(text),
+            (false, true) => split.preexisting_warnings.push(text),
+        }
+    }
+    for error in before.iter().filter(|(_, blocking)| *blocking) {
+        match remaining.get_mut(error) {
+            Some(count) if *count > 0 => *count -= 1,
+            _ => split.errors_fixed.push(error.0.clone()),
+        }
+    }
+    split
 }
 
 /// Set [`ai_placed`](crate::node_network::Node::ai_placed) on every node of

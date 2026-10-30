@@ -298,11 +298,20 @@ Rules that matter:
 - **Rebuilt body nodes keep their identity by name**, so an `edit --replace` of
   unchanged `query` output changes no ids and moves nothing on the canvas.
 
-#### `success` means *validates*, not merely *parsed*
+#### `success` means *applied and broke nothing*, not merely *parsed*
 
 `edit` returns JSON. `success: true` means the script parsed, applied **and**
-the resulting network validates. Blocking validation errors land in `errors`
-(and fail the edit); non-blocking ones land in `warnings`. Names in
+introduced no blocking validation error. Blocking errors the edit caused land
+in `errors` (and fail the edit); non-blocking ones in `warnings`.
+
+Errors the network **already had** are the user's baseline, not your edit's:
+they land in `preexisting_errors` / `preexisting_warnings` and fail nothing (a
+missing linked library is the everyday case). `errors_fixed` lists old errors
+your edit removed. `applied` says whether the statements landed at all, and
+`network_valid` whether the whole network, old errors included, is free of
+blocking errors (absent when the edit did not apply). Errors are matched by
+`path: message`, so an old error whose message your edit changed reads as one
+fixed and one new. Names in
 `nodes_created` / `nodes_updated` / `nodes_deleted` and in error text are **full
 paths** (`m1/a`), because `m1/a` and `m2/a` are different nodes.
 
